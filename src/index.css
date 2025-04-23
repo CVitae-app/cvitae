@@ -1,0 +1,48 @@
+/* Load custom font (Poppins) */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
+/* Tailwind core layers */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles for consistent rendering */
+@layer base {
+  html {
+    font-family: 'Poppins', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  *, *::before, *::after {
+    @apply box-border;
+  }
+
+  ::selection {
+    @apply bg-blue-200 text-blue-900;
+  }
+}
+
+/* Force white background on export */
+.a4-page {
+  background-color: white !important;
+  color: black !important;
+}
+
+/* Optional: make sure images don't shift */
+.a4-page img {
+  max-width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+/* Optional: avoid breaks inside sections on print */
+.avoid-break-inside {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
