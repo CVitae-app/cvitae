@@ -1,7 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import CVBuilder from "./pages/CVBuilder";
-import MetaTags from "./utils/metatags";
+import MetaTags from "./utils/MetaTags";
 
 export default function App() {
   return (
