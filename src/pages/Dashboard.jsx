@@ -9,7 +9,7 @@ import { useTranslation } from "../contexts/LanguageContext";
 import { supabase } from "../utils/supabaseClient";
 import MetaTags from "../utils/MetaTags";
 
-import TopBar from "../sections/TopBar";
+import TopBar from "../sections/Topbar";
 import CVCard from "../components/Dashboard/CVCard";
 import ProfileMenu from "../components/Dashboard/ProfileMenu";
 
