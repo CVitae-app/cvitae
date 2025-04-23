@@ -16,7 +16,7 @@ import useUndoRedo from "../hooks/useUndoRedo";
 import useDebouncedCallback from "../hooks/useDebouncedCallback";
 import MetaTags from "../utils/MetaTags";
 
-import TopBar from "../sections/TopBar";
+import TopBar from "../sections/Topbar";
 import Sidebar from "../sections/Sidebar";
 import FloatingBar from "../components/FloatingBar";
 import DownloadModal from "../components/DownloadModal";
