@@ -54,6 +54,7 @@ export default function CVPreview({
   setSettings,
   currentCVId,
   isCompact = false,
+  onScaleChange,
 }) {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -119,7 +120,6 @@ export default function CVPreview({
     if (!short) return `${capitalize(maand)} ${jaar}`;
     return `${short.charAt(0).toUpperCase() + short.slice(1)} ${jaar}`;
   };
-
   const shouldRenderSection = (items = [], keys = []) =>
     items?.some((item) =>
       keys.some((key) => {
@@ -232,6 +232,7 @@ export default function CVPreview({
   useLayoutEffect(() => {
     const splitIntoPages = () => {
       if (!measuringRef.current) return;
+
       const chunks = Array.from(measuringRef.current.querySelectorAll(".cv-chunk"));
       const pages = [];
       let currentPage = [];
@@ -256,11 +257,15 @@ export default function CVPreview({
     const handleResize = () => {
       if (!wrapperRef.current) return;
       const wrapperWidth = wrapperRef.current.offsetWidth;
-      const newScale = isCompact
+      const proposedScale = isCompact
         ? Math.min(wrapperWidth / A4_WIDTH, 0.34)
         : Math.min(1, wrapperWidth / A4_WIDTH);
 
-      setScale((prev) => (Math.abs(prev - newScale) > 0.001 ? newScale : prev));
+      if (Math.abs(scale - proposedScale) > 0.001 && proposedScale > 0) {
+        setScale(proposedScale);
+        if (typeof onScaleChange === "function") onScaleChange(proposedScale);
+      }
+
       setTimeout(splitIntoPages, 50);
     };
 
@@ -269,31 +274,14 @@ export default function CVPreview({
     return () => window.removeEventListener("resize", handleResize);
   }, [isCompact, forceRender, data, settings, dynamicSteps]);
 
-  useEffect(() => {
-    const blockContextMenu = (e) => e.preventDefault();
-    const blockShortcuts = (e) => {
-      const key = e.key.toLowerCase();
-      if ((key === "p" || key === "s") && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-      }
-    };
-
-    document.addEventListener("contextmenu", blockContextMenu);
-    document.addEventListener("keydown", blockShortcuts);
-    return () => {
-      document.removeEventListener("contextmenu", blockContextMenu);
-      document.removeEventListener("keydown", blockShortcuts);
-    };
-  }, []);
-
   return (
     <div
       ref={wrapperRef}
       className={`w-full h-full flex justify-center items-start bg-transparent overflow-x-hidden print:scale-[1] ${
         isCompact ? "" : "overflow-y-auto"
       }`}
+      style={{ paddingTop: isCompact ? 0 : "56px" }}
     >
-      {/* Measuring block (hidden) */}
       <div
         ref={measuringRef}
         style={{
@@ -324,62 +312,66 @@ export default function CVPreview({
           renderMainSection={renderMainSection}
           renderExtraPersonalInfo={() => renderExtraPersonalInfo(getFontSize())}
           dynamicSteps={dynamicSteps}
-          pageBlocks={null} // ✅ Show all chunks
-          globalChunkIndexRef={{ current: 0 }} // ✅ Track index
+          pageBlocks={null}
+          globalChunkIndexRef={{ current: 0 }}
         />
       </div>
 
-      {/* Rendered visible pages */}
-      <div style={{ transform: `scale(${scale})`, transformOrigin: "top center" }}>
+      <div
+        className="flex justify-center"
+        style={{
+          minHeight: isCompact ? undefined : `${A4_HEIGHT * scale}px`,
+          alignItems: isCompact ? "flex-start" : "flex-end",
+          transform: `scale(${scale})`,
+          transformOrigin: "top center",
+        }}
+      >
         <div style={{ width: `${A4_WIDTH}px` }}>
-          {(() => {
-            let globalChunkIndex = 0;
-            return (pages.length ? pages : [null])
-              .filter((page) => page === null || page.length > 0)
-              .map((pageChunkIndexes, index) => {
-                const pageStart = globalChunkIndex;
-                globalChunkIndex += pageChunkIndexes?.length || 0;
-
-                return (
-                  <div
-                    key={`page-${index}`}
-                    className="a4-page shadow-2xl bg-white text-black overflow-hidden print:break-after-page"
-                    style={{
-                      width: `${A4_WIDTH}px`,
-                      height: `${A4_HEIGHT}px`,
-                      padding: isCompact ? "0px" : "40px 50px",
-                      boxSizing: "border-box",
-                      display: "flex",
-                      flexDirection: "column",
-                      marginBottom: isCompact ? "0px" : "0px",
-                    }}
-                  >
-                    <TemplateComponent
-                      A4_WIDTH={A4_WIDTH}
-                      A4_HEIGHT={A4_HEIGHT}
-                      wrapperRef={null}
-                      settings={settings}
-                      imageUrl={imageUrl}
-                      data={data}
-                      t={t}
-                      getFontSize={getFontSize}
-                      getHeaderFontSize={getHeaderFontSize}
-                      capitalize={capitalize}
-                      translateIfPossible={translateIfPossible}
-                      shouldRenderSection={shouldRenderSection}
-                      renderDotLevel={renderDotLevel}
-                      renderDate={renderDate}
-                      renderMainSection={renderMainSection}
-                      renderExtraPersonalInfo={() => renderExtraPersonalInfo(getFontSize())}
-                      dynamicSteps={dynamicSteps}
-                      pageIndex={index}
-                      pageBlocks={pageChunkIndexes}
-                      globalChunkIndexRef={{ current: pageStart }}
-                    />
-                  </div>
-                );
-              });
-          })()}
+          {(pages.length ? pages : [null])
+            .filter((page, idx) => page === null || page.length > 0 || idx === 0)
+            .map((pageChunkIndexes, index) => {
+              const pageStart = pages
+                .slice(0, index)
+                .reduce((acc, curr) => acc + (curr?.length || 0), 0);
+              return (
+                <div
+                  key={`page-${index}`}
+                  className="a4-page shadow-2xl bg-white text-black overflow-hidden print:break-after-page"
+                  style={{
+                    width: `${A4_WIDTH}px`,
+                    height: `${A4_HEIGHT}px`,
+                    padding: isCompact ? "0px" : "40px 50px",
+                    boxSizing: "border-box",
+                    display: "flex",
+                    flexDirection: "column",
+                    marginBottom: isCompact ? "0px" : "0px",
+                  }}
+                >
+                  <TemplateComponent
+                    A4_WIDTH={A4_WIDTH}
+                    A4_HEIGHT={A4_HEIGHT}
+                    wrapperRef={null}
+                    settings={settings}
+                    imageUrl={imageUrl}
+                    data={data}
+                    t={t}
+                    getFontSize={getFontSize}
+                    getHeaderFontSize={getHeaderFontSize}
+                    capitalize={capitalize}
+                    translateIfPossible={translateIfPossible}
+                    shouldRenderSection={shouldRenderSection}
+                    renderDotLevel={renderDotLevel}
+                    renderDate={renderDate}
+                    renderMainSection={renderMainSection}
+                    renderExtraPersonalInfo={() => renderExtraPersonalInfo(getFontSize())}
+                    dynamicSteps={dynamicSteps}
+                    pageIndex={index}
+                    pageBlocks={pageChunkIndexes}
+                    globalChunkIndexRef={{ current: pageStart }}
+                  />
+                </div>
+              );
+            })}
         </div>
       </div>
     </div>

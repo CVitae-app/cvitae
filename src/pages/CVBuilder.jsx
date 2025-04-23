@@ -70,6 +70,7 @@ export default function CVBuilder() {
   const { user } = useAuth();
   const previewRef = useRef();
 
+  const [mobileScale, setMobileScale] = useState(1); // ✅ for dynamic preview height
   const [showModal, setShowModal] = useState(false);
   const [forceSubscribeStep, setForceSubscribeStep] = useState(false);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
@@ -345,17 +346,23 @@ export default function CVBuilder() {
           </div>
 
           {showPreviewMobile && (
-  <div className="xl:hidden fixed inset-0 z-30 bg-gray-50 px-4 flex justify-center items-center overflow-hidden">
-  <div className="w-full max-w-[794px] rounded-2xl bg-white shadow-2xl overflow-hidden">
-    <CVPreview
-      data={{ ...formData, workExperience: formData.work }}
-      dynamicSteps={dynamicSteps}
-      settings={settings}
-      setSettings={setSettings}
-      currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
-    />
-  </div>
-</div>
+            <div
+              className="xl:hidden fixed inset-0 z-30 bg-gray-50 overflow-y-auto pt-4 px-4"
+              style={{ paddingBottom: "0px" }}
+            >
+              <div
+  className="w-full max-w-[794px] mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden"
+>
+                <CVPreview
+                  data={{ ...formData, workExperience: formData.work }}
+                  dynamicSteps={dynamicSteps}
+                  settings={settings}
+                  setSettings={setSettings}
+                  currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
+                  onScaleChange={setMobileScale}
+                />
+              </div>
+            </div>
           )}
         </div>
 
@@ -368,17 +375,16 @@ export default function CVBuilder() {
         </div>
 
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 px-4 py-4 xl:hidden">
-  <div className="max-w-screen-sm mx-auto w-full">
-    <FloatingBar
-      onChange={handleSettingsChange}
-      settings={settings}
-      onRequireAuth={() => !user && setShowModal(true)}
-      onTogglePreview={() => setShowPreviewMobile(prev => !prev)}
-      isPreviewOpen={showPreviewMobile}
-    />
-  </div>
-</div>
-
+          <div className="max-w-screen-sm mx-auto w-full">
+            <FloatingBar
+              onChange={handleSettingsChange}
+              settings={settings}
+              onRequireAuth={() => !user && setShowModal(true)}
+              onTogglePreview={() => setShowPreviewMobile(prev => !prev)}
+              isPreviewOpen={showPreviewMobile}
+            />
+          </div>
+        </div>
 
         <DownloadModal
           isOpen={showModal}
@@ -400,6 +406,7 @@ export default function CVBuilder() {
               dynamicSteps={dynamicSteps}
               settings={settings}
               currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
+              onScaleChange={() => {}} // no-op
             />
           </div>
         </div>
