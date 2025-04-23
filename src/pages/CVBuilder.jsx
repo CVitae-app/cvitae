@@ -345,7 +345,7 @@ export default function CVBuilder() {
           </div>
 
           {showPreviewMobile && (
-  <div className="xl:hidden fixed inset-0 z-30 bg-gray-50 pt-55 pb-12 px-4 flex justify-center items-center overflow-hidden">
+  <div className="xl:hidden fixed inset-0 z-30 bg-gray-50 px-4 flex justify-center items-center overflow-hidden">
   <div className="w-full max-w-[794px] rounded-2xl bg-white shadow-2xl overflow-hidden">
     <CVPreview
       data={{ ...formData, workExperience: formData.work }}
