@@ -14,7 +14,7 @@ import { supabase } from "../utils/supabaseClient";
 
 import useUndoRedo from "../hooks/useUndoRedo";
 import useDebouncedCallback from "../hooks/useDebouncedCallback";
-import MetaTags from "../utils/metatags";
+import MetaTags from "../utils/MetaTags";
 
 import TopBar from "../sections/TopBar";
 import Sidebar from "../sections/Sidebar";
