@@ -7,7 +7,7 @@ import { AnimatePresence } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../contexts/LanguageContext";
 import { supabase } from "../utils/supabaseClient";
-import MetaTags from "../utils/metatags";
+import MetaTags from "../utils/MetaTags";
 
 import TopBar from "../sections/TopBar";
 import CVCard from "../components/Dashboard/CVCard";
