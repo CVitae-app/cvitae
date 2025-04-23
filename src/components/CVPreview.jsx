@@ -5,13 +5,13 @@ import { useAuth } from "../contexts/AuthContext";
 import { getDotLevel } from "../utils/getDotLevel";
 
 // Templates
-import Luna from "./templates/Luna";
-import Athena from "./templates/Athena";
-import Phoenix from "./templates/Phoenix";
-import Orion from "./templates/Orion";
-import Caesar from "./templates/Caesar";
-import Sherlock from "./templates/Sherlock";
-import Gatsby from "./templates/Gatsby";
+import Luna from "./Templates/Luna";
+import Athena from "./Templates/Athena";
+import Phoenix from "./Templates/Phoenix";
+import Orion from "./Templates/Orion";
+import Caesar from "./Templates/Caesar";
+import Sherlock from "./Templates/Sherlock";
+import Gatsby from "./Templates/Gatsby";
 
 const A4_WIDTH = 794;
 const A4_HEIGHT = 1123;
