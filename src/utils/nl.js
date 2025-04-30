@@ -263,6 +263,8 @@ stepPlan: "Abonnement",
 stepDownload: "Downloaden",
 login: "Inloggen",
 signup: "Account aanmaken",
+loading: "Laden",
+
 
     },
   };

@@ -279,6 +279,8 @@ stepPlan: "Plan",
 stepDownload: "Download",
 login: "Login",
 signup: "Sign up",
+loading: "Loading",
+
 
   },
 };

@@ -18,7 +18,7 @@ const plans = [
     labelKey: "plan3MonthsLabel",
     descriptionKey: "plan3MonthsDesc",
     checkoutUrl: "https://buy.stripe.com/test_5kA7vFfMJ4xJepa4gh",
-    popular: true, // Most popular plan
+    popular: true,
   },
   {
     id: "6months",
@@ -61,30 +61,31 @@ function DownloadModal({
 
   const setStepSmart = useCallback(async () => {
     try {
-      await supabase.auth.refreshSession();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (!user) return setStep("login");
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("is_subscribed")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const subscribed = profile?.is_subscribed === true;
+      if (subscribed) {
+        localStorage.removeItem("modalStep");
+        setStep("download");
+      } else {
+        setStep("subscribe");
+      }
     } catch {
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await supabase.auth.refreshSession(); // Auto-retry once
+      setInlineError("Something went wrong.");
+      setStep("subscribe");
     }
-
-    const { data: userData } = await supabase.auth.getUser();
-    const isLoggedIn = userData?.user;
-    if (!isLoggedIn) return setStep("login");
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("is_subscribed")
-      .eq("id", userData.user.id)
-      .single();
-
-    const subscribed = profile?.is_subscribed;
-    if (subscribed) localStorage.removeItem("modalStep");
-    setStep(subscribed ? "download" : "subscribe");
   }, []);
 
   useEffect(() => {
     if (!isOpen) return;
-
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
 
@@ -126,27 +127,55 @@ function DownloadModal({
     if (!validate()) return;
     setLoading(true);
     setInlineError("");
+    setSuccessMessage("");
     localStorage.setItem("lastEmail", email);
 
-    const authFn =
-      emailMode === "signup"
-        ? supabase.auth.signUp
-        : supabase.auth.signInWithPassword;
+    const isSignup = emailMode === "signup";
 
-    const { data, error } = await authFn({ email, password });
-    if (error) {
-      setInlineError(error.message);
-      setLoading(false);
-      return;
-    }
+    try {
+      const { error: authError } = isSignup
+        ? await supabase.auth.signUp({ email, password })
+        : await supabase.auth.signInWithPassword({ email, password });
 
-    const { data: userData } = await supabase.auth.getUser();
-    if (userData?.user) {
+      if (authError) {
+        setInlineError(authError.message);
+        return;
+      }
+
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        setInlineError(sessionError.message);
+        return;
+      }
+
+      const user = sessionData?.session?.user;
+      if (!user) {
+        setInlineError(t("loginError"));
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!profile) {
+        await supabase.from("profiles").insert([
+          {
+            id: user.id,
+            email: user.email,
+            is_subscribed: false,
+          },
+        ]);
+      }
+
       await setStepSmart();
-    } else {
+    } catch {
       setInlineError(t("loginError"));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleResetPassword = async () => {
@@ -218,7 +247,6 @@ function DownloadModal({
             <XMarkIcon className="w-5 h-5" />
           </button>
 
-          {/* Step Progress */}
           <div className="flex justify-center gap-4 text-xs text-gray-500 uppercase font-medium tracking-widest">
             <span className={step === "login" ? "text-black font-semibold" : ""}>{t("stepLogin")}</span>
             <span className="h-4 border-l border-gray-300"></span>
@@ -227,38 +255,45 @@ function DownloadModal({
             <span className={step === "download" ? "text-black font-semibold" : ""}>{t("stepDownload")}</span>
           </div>
 
-          {/* Step View */}
           <div className="transition-all duration-300 ease-in-out space-y-4" key={step}>
             {inlineError && <div className="text-red-500 text-sm text-center">{inlineError}</div>}
 
             {step === "login" && (
               <div>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t("emailPlaceholder")}
-                  className="w-full border px-3 py-2 rounded-md text-sm mb-3"
-                />
-                {emailMode !== "reset" && (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (emailMode === "reset") handleResetPassword();
+                    else handleEmailAuth();
+                  }}
+                >
                   <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={t("passwordPlaceholder")}
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={t("emailPlaceholder")}
                     className="w-full border px-3 py-2 rounded-md text-sm mb-3"
                   />
-                )}
-                {successMessage && (
-                  <p className="text-xs text-green-600 text-center">{successMessage}</p>
-                )}
-                <button
-                  onClick={emailMode === "reset" ? handleResetPassword : handleEmailAuth}
-                  disabled={loading}
-                  className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition"
-                >
-                  {loading ? t("loading") + "..." : emailMode === "reset" ? t("sendResetLink") : t(emailMode)}
-                </button>
+                  {emailMode !== "reset" && (
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={t("passwordPlaceholder")}
+                      className="w-full border px-3 py-2 rounded-md text-sm mb-3"
+                    />
+                  )}
+                  {successMessage && (
+                    <p className="text-xs text-green-600 text-center">{successMessage}</p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition"
+                  >
+                    {loading ? t("loading") + "..." : emailMode === "reset" ? t("sendResetLink") : t(emailMode)}
+                  </button>
+                </form>
 
                 <div className="flex justify-between text-xs text-blue-600 mt-2 underline cursor-pointer">
                   <span onClick={() => setEmailMode(emailMode === "signup" ? "login" : "signup")}>
