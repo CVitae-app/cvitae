@@ -149,47 +149,50 @@ function DownloadModal({
     setInlineError("");
     setSuccessMessage("");
     localStorage.setItem("lastEmail", email);
-
+  
     const isSignup = emailMode === "signup";
-
+  
     try {
       const { error: authError } = isSignup
         ? await supabase.auth.signUp({ email, password })
         : await supabase.auth.signInWithPassword({ email, password });
-
+  
       if (authError) {
         setInlineError(authError.message);
         return;
       }
-
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        setInlineError(sessionError.message);
-        return;
+  
+      // 🕒 Wait for session to be fully ready
+      for (let i = 0; i < 10; i++) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.user) break;
+        await new Promise((r) => setTimeout(r, 250)); // retry up to 2.5s
       }
-
-      const currentUser = sessionData?.session?.user;
-      if (!currentUser) {
+  
+      const { data: sessionData } = await supabase.auth.getSession();
+      const user = sessionData?.session?.user;
+  
+      if (!user) {
         setInlineError(t("loginError"));
         return;
       }
-
+  
       const { data: profile } = await supabase
         .from("profiles")
         .select("id")
-        .eq("id", currentUser.id)
+        .eq("id", user.id)
         .maybeSingle();
-
+  
       if (!profile) {
         await supabase.from("profiles").insert([
           {
-            id: currentUser.id,
-            email: currentUser.email,
+            id: user.id,
+            email: user.email,
             is_subscribed: false,
           },
         ]);
       }
-
+  
       localStorage.setItem("modalStep", "subscribe");
       await setStepSmart();
     } catch {
@@ -197,7 +200,7 @@ function DownloadModal({
     } finally {
       setLoading(false);
     }
-  };
+  };  
 
   const handleResetPassword = async () => {
     if (!validate()) return;
