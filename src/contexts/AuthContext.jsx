@@ -7,17 +7,17 @@ import {
   useMemo,
 } from "react";
 import { supabase } from "@/utils/supabaseClient";
+import { sendEmail } from "@/utils/email";
+import dayjs from "dayjs";
+import "dayjs/locale/nl";
 
 const AuthContext = createContext();
 
-/**
- * AuthProvider manages authentication state with Supabase and provides it to the app.
- */
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch current user on mount
+  // Fetch current user + profile on mount
   useEffect(() => {
     let isMounted = true;
 
@@ -29,13 +29,28 @@ export const AuthProvider = ({ children }) => {
         }
 
         const currentUser = data?.user || null;
-        if (isMounted) {
-          setUser(currentUser);
-          if (currentUser) {
-            localStorage.setItem("auth_user", JSON.stringify(currentUser));
-          } else {
-            localStorage.removeItem("auth_user");
+
+        if (currentUser) {
+          // Fetch language from profile
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("language, first_name")
+            .eq("id", currentUser.id)
+            .single();
+
+          const enrichedUser = {
+            ...currentUser,
+            language: profile?.language || "en",
+            firstName: profile?.first_name || "there",
+          };
+
+          if (isMounted) {
+            setUser(enrichedUser);
+            localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
           }
+        } else if (isMounted) {
+          setUser(null);
+          localStorage.removeItem("auth_user");
         }
       } catch (err) {
         console.error("Unexpected auth error:", err);
@@ -47,13 +62,56 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (event, session) => {
         const newUser = session?.user || null;
-        setUser(newUser);
 
+        if (event === "SIGNED_UP" && newUser) {
+          const language = navigator.language.startsWith("nl") ? "nl" : "en";
+          const firstName = newUser.user_metadata?.firstName || "there";
+
+          // Store language and name in profiles
+          await supabase.from("profiles").upsert({
+            id: newUser.id,
+            email: newUser.email,
+            language,
+            first_name: firstName,
+          });
+
+          // Format dates for welcome email
+          const locale = language === "nl" ? "nl" : "en";
+          const trialStart = dayjs().locale(locale).format("D MMMM YYYY");
+          const trialEnd = dayjs().add(3, "day").locale(locale).format("D MMMM YYYY");
+
+          // Send welcome email
+          await sendEmail(newUser.email, language, "welcome", {
+            name: firstName,
+            trial_length: "3",
+            trial_start_date: trialStart,
+            trial_end_date: trialEnd,
+            action_url: "https://app.cvitae.io/dashboard",
+            support_url: "https://cvitae.io/help",
+            year: String(new Date().getFullYear()),
+          });
+        }
+
+        // On any auth state change, fetch full user data from profiles
         if (newUser) {
-          localStorage.setItem("auth_user", JSON.stringify(newUser));
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("language, first_name")
+            .eq("id", newUser.id)
+            .single();
+
+          const enrichedUser = {
+            ...newUser,
+            language: profile?.language || "en",
+            firstName: profile?.first_name || "there",
+          };
+
+          setUser(enrichedUser);
+          localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
         } else {
+          setUser(null);
           localStorage.removeItem("auth_user");
         }
       }
@@ -87,9 +145,6 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-/**
- * useAuth provides access to the authenticated user and logout function.
- */
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
