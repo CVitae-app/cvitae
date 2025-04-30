@@ -62,13 +62,13 @@ function DownloadModal({
   const setStepSmart = useCallback(async () => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const user = sessionData?.session?.user;
-      if (!user) return setStep("login");
+      const currentUser = sessionData?.session?.user;
+      if (!currentUser) return setStep("login");
 
       const { data: profile } = await supabase
         .from("profiles")
         .select("is_subscribed")
-        .eq("id", user.id)
+        .eq("id", currentUser.id)
         .maybeSingle();
 
       const subscribed = profile?.is_subscribed === true;
@@ -86,13 +86,20 @@ function DownloadModal({
 
   useEffect(() => {
     if (!isOpen) return;
+
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
+    const savedStep = localStorage.getItem("modalStep");
 
     const init = async () => {
       if (fromProfileMenu) return setStep("login");
       if (startAtSubscribe || fromStripe) return setStep("subscribe");
-      await setStepSmart();
+
+      if (savedStep === "subscribe" || savedStep === "download") {
+        await setStepSmart();
+      } else {
+        setStep("login");
+      }
     };
 
     init();
@@ -110,6 +117,19 @@ function DownloadModal({
       document.removeEventListener("keydown", handler);
     };
   }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setStep("login");
+      setEmailMode("signup");
+      setEmail(localStorage.getItem("lastEmail") || "");
+      setPassword("");
+      setErrors({});
+      setInlineError("");
+      setSuccessMessage("");
+      setLoading(false);
+    }
+  }, [isOpen]);
 
   const validate = useCallback(() => {
     const newErrors = {};
@@ -148,8 +168,8 @@ function DownloadModal({
         return;
       }
 
-      const user = sessionData?.session?.user;
-      if (!user) {
+      const currentUser = sessionData?.session?.user;
+      if (!currentUser) {
         setInlineError(t("loginError"));
         return;
       }
@@ -157,19 +177,20 @@ function DownloadModal({
       const { data: profile } = await supabase
         .from("profiles")
         .select("id")
-        .eq("id", user.id)
+        .eq("id", currentUser.id)
         .maybeSingle();
 
       if (!profile) {
         await supabase.from("profiles").insert([
           {
-            id: user.id,
-            email: user.email,
+            id: currentUser.id,
+            email: currentUser.email,
             is_subscribed: false,
           },
         ]);
       }
 
+      localStorage.setItem("modalStep", "subscribe");
       await setStepSmart();
     } catch {
       setInlineError(t("loginError"));
