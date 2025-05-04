@@ -182,7 +182,7 @@ function DownloadModal({
   
     try {
       if (!isSignup) {
-        await supabase.auth.signOut(); // logout before logging in
+        await supabase.auth.signOut(); // ensure clean login
       }
   
       const { data, error } = isSignup
@@ -200,53 +200,43 @@ function DownloadModal({
         return;
       }
   
-      let session = null;
-      for (let i = 0; i < 10; i++) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData.session?.user) {
-          session = sessionData.session;
-          break;
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentUser = sessionData?.session?.user;
+  
+      if (currentUser) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", currentUser.id)
+          .maybeSingle();
+  
+        if (!profile) {
+          await supabase.from("profiles").insert([
+            {
+              id: currentUser.id,
+              email: currentUser.email,
+              is_subscribed: false,
+              language,
+            },
+          ]);
         }
-        await new Promise((r) => setTimeout(r, 250));
+  
+        window.dataLayer?.push({
+          event: isSignup ? "auth_email_signup" : "auth_email_login",
+          email,
+        });
       }
   
-      const currentUser = session?.user;
-      if (!currentUser) {
-        setInlineError(t("loginError"));
-        setLoading(false);
-        return;
-      }
-  
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", currentUser.id)
-        .maybeSingle();
-  
-      if (!profile) {
-        await supabase.from("profiles").insert([
-          {
-            id: currentUser.id,
-            email: currentUser.email,
-            is_subscribed: false,
-            language,
-          },
-        ]);
-      }
-  
-      window.dataLayer?.push({
-        event: isSignup ? "auth_email_signup" : "auth_email_login",
-        email,
-      });
-  
-      localStorage.setItem("modalStep", "subscribe");
-      await setStepSmart();
+      await supabase.auth.refreshSession(); // force refresh
+      setTimeout(async () => {
+        await setStepSmart(); // let Supabase hydrate
+      }, 800);
     } catch {
       setInlineError(t("loginError"));
     } finally {
       setLoading(false);
     }
-  };
+  };  
   
   const handleResetPassword = async () => {
     if (loading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
