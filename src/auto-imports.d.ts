@@ -30,6 +30,7 @@ declare global {
   const en: typeof import('./utils/en.js')['default']
   const getDotLevel: typeof import('./utils/getDotLevel.js')['getDotLevel']
   const nl: typeof import('./utils/nl.js')['default']
+  const sendEmail: typeof import('./utils/email')['sendEmail']
   const supabase: typeof import('./utils/supabaseClient.js')['supabase']
   const translations: typeof import('./utils/translations.js')['default']
   const useAuth: typeof import('./contexts/AuthContext.jsx')['useAuth']

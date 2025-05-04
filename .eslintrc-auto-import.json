@@ -34,6 +34,7 @@
     "getDotLevel": true,
     "MetaTags": true,
     "en": true,
-    "nl": true
+    "nl": true,
+    "sendEmail": true
   }
 }
