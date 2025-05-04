@@ -43,7 +43,7 @@ function DownloadModal({
   startAtSubscribe = false,
 }) {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, isHydrated } = useAuth();
   const modalRef = useRef();
   const previewRef = useRef();
 
@@ -93,17 +93,11 @@ function DownloadModal({
   }, [isOpen, user, step, setStepSmart]);
 
   useEffect(() => {
-    if (!isOpen) return;
-
-    if (isOpen && user && step === "login") {
-      localStorage.removeItem("modalStep");
-      setStepSmart();
-      return;
-    }
-
+    if (!isOpen || !isHydrated) return;
+  
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
-
+  
     const init = async () => {
       let session = null;
       for (let i = 0; i < 10; i++) {
@@ -114,12 +108,12 @@ function DownloadModal({
         }
         await new Promise((r) => setTimeout(r, 250));
       }
-
+  
       if (session?.user?.email) {
         setEmail(session.user.email);
         localStorage.setItem("lastEmail", session.user.email);
       }
-
+  
       if (fromProfileMenu) return setStep("login");
       if (startAtSubscribe || fromStripe) {
         window.dataLayer?.push({
@@ -128,12 +122,12 @@ function DownloadModal({
         });
         return setStep("subscribe");
       }
-
+  
       await setStepSmart();
     };
-
+  
     init();
-  }, [isOpen, fromProfileMenu, startAtSubscribe, setStepSmart]);
+  }, [isOpen, isHydrated, fromProfileMenu, startAtSubscribe, setStepSmart]);  
 
   useEffect(() => {
     const handler = (e) => {
