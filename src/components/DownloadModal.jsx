@@ -143,9 +143,14 @@ function DownloadModal({
   }, [onClose]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    setStep("login");
-    setEmailMode("signup");
+    if (!isOpen || !isHydrated) return;
+  
+    // Only reset to login if user is not authenticated
+    if (!user) {
+      setStep("login");
+      setEmailMode("signup");
+    }
+  
     setEmail(localStorage.getItem("lastEmail") || "");
     setPassword("");
     setErrors({});
@@ -155,7 +160,7 @@ function DownloadModal({
     setGoogleLoading(false);
     setLoginAttempts(0);
     setShowPassword(false);
-  }, [isOpen]);
+  }, [isOpen, user, isHydrated]);  
 
   const validate = useCallback(() => {
     const newErrors = {};
