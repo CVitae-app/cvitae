@@ -6,7 +6,33 @@ import { supabase } from "../utils/supabaseClient";
 import { downloadCV } from "../utils/downloadPDF";
 import CVPreview from "./CVPreview";
 
-const plans = [/* your plans stay unchanged */];
+const plans = [
+  {
+    id: "1month",
+    labelKey: "plan1MonthLabel",
+    descriptionKey: "plan1MonthDesc",
+    checkoutUrl: "https://buy.stripe.com/test_fZe2blcAx5BNa8UfYY",
+  },
+  {
+    id: "3months",
+    labelKey: "plan3MonthsLabel",
+    descriptionKey: "plan3MonthsDesc",
+    checkoutUrl: "https://buy.stripe.com/test_5kA7vFfMJ4xJepa4gh",
+    popular: true,
+  },
+  {
+    id: "6months",
+    labelKey: "plan6MonthsLabel",
+    descriptionKey: "plan6MonthsDesc",
+    checkoutUrl: "https://buy.stripe.com/test_14k6rB2ZXggr94Q3ce",
+  },
+  {
+    id: "1year",
+    labelKey: "plan1YearLabel",
+    descriptionKey: "plan1YearDesc",
+    checkoutUrl: "https://buy.stripe.com/test_fZe7vF0RP6FR5SEcMP",
+  },
+];
 
 function DownloadModal({
   isOpen,
@@ -36,25 +62,33 @@ function DownloadModal({
   const selectedPlanData = useMemo(() => plans.find((p) => p.id === selectedPlan), [selectedPlan]);
 
   const setStepSmart = useCallback(async () => {
+    console.log("🧠 Checking smart step based on Supabase session...");
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const currentUser = sessionData?.session?.user;
+      console.log("🔍 Session user:", currentUser);
+
       if (!currentUser) return setStep("login");
 
-      const { data: profile } = await supabase
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("is_subscribed")
         .eq("id", currentUser.id)
         .maybeSingle();
 
+      console.log("📋 Profile lookup:", profile, profileError);
+
       const subscribed = profile?.is_subscribed === true;
       if (subscribed) {
+        console.log("✅ User is subscribed");
         localStorage.removeItem("modalStep");
         setStep("download");
       } else {
+        console.log("📦 User not subscribed → go to subscribe step");
         setStep("subscribe");
       }
-    } catch {
+    } catch (err) {
+      console.error("❌ setStepSmart error:", err);
       setInlineError("Something went wrong.");
       setStep("subscribe");
     }
@@ -63,19 +97,26 @@ function DownloadModal({
   useEffect(() => {
     if (!isOpen) return;
 
+    console.log("📥 Modal opened. Checking context and localStorage...");
+
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
     const savedStep = localStorage.getItem("modalStep");
 
     const init = async () => {
       if (user?.email) {
+        console.log("📧 User email from context:", user.email);
         setEmail(user.email);
         localStorage.setItem("lastEmail", user.email);
       }
 
-      if (fromProfileMenu) return setStep("login");
+      if (fromProfileMenu) {
+        console.log("👤 Opened from profile menu → login step");
+        return setStep("login");
+      }
 
       if (startAtSubscribe || fromStripe) {
+        console.log("💳 Coming from Stripe or AccountSettings → skip to subscribe");
         window.dataLayer?.push({
           event: "returned_from_stripe",
           user_id: user?.id || "anonymous",
@@ -84,8 +125,10 @@ function DownloadModal({
       }
 
       if (savedStep === "subscribe" || savedStep === "download") {
+        console.log("💾 Restoring step from localStorage:", savedStep);
         await setStepSmart();
       } else {
+        console.log("🔐 Defaulting to login step");
         setStep("login");
       }
     };
@@ -107,18 +150,19 @@ function DownloadModal({
   }, [onClose]);
 
   useEffect(() => {
-    if (!isOpen) {
-      setStep("login");
-      setEmailMode("signup");
-      setEmail(localStorage.getItem("lastEmail") || "");
-      setPassword("");
-      setErrors({});
-      setInlineError("");
-      setSuccessMessage("");
-      setLoading(false);
-      setLoginAttempts(0);
-      setShowPassword(false);
-    }
+    if (!isOpen) return;
+
+    console.log("🔄 Resetting modal state...");
+    setStep("login");
+    setEmailMode("signup");
+    setEmail(localStorage.getItem("lastEmail") || "");
+    setPassword("");
+    setErrors({});
+    setInlineError("");
+    setSuccessMessage("");
+    setLoading(false);
+    setLoginAttempts(0);
+    setShowPassword(false);
   }, [isOpen]);
 
   const validate = useCallback(() => {
@@ -135,21 +179,22 @@ function DownloadModal({
 
   const handleEmailAuth = async () => {
     if (loading || !validate()) return;
-  
+
+    console.log("🚀 Starting email auth:", { emailMode, email });
     setLoading(true);
     setInlineError("");
     setSuccessMessage("");
-  
+
     if (loginAttempts >= 5) {
       setInlineError(t("tooManyAttempts") || "Too many failed attempts. Please try again later.");
       setLoading(false);
       return;
     }
-  
+
     localStorage.setItem("lastEmail", email);
     const isSignup = emailMode === "signup";
     const language = navigator.language.startsWith("nl") ? "nl" : "en";
-  
+
     try {
       const { data, error } = isSignup
         ? await supabase.auth.signUp({
@@ -158,70 +203,70 @@ function DownloadModal({
             options: { data: { language } },
           })
         : await supabase.auth.signInWithPassword({ email, password });
-  
-      console.log("🟢 Auth response:", data, error);
-  
+
+      console.log("🟢 Supabase auth response:", { data, error });
+
       if (error) {
         setLoginAttempts((prev) => prev + 1);
         setInlineError(error.message);
         setLoading(false);
         return;
       }
-  
-      // 🔁 Wait for Supabase session to hydrate
+
       let session = null;
       for (let i = 0; i < 10; i++) {
         const { data } = await supabase.auth.getSession();
+        console.log(`⏳ Session check ${i + 1}/10:`, data.session?.user?.email);
         if (data.session?.user) {
           session = data.session;
           break;
         }
-        console.log("⏳ Waiting for session...");
         await new Promise((r) => setTimeout(r, 250));
       }
-  
-      const user = session?.user;
-      console.log("✅ Final session:", session);
-  
-      if (!user) {
+
+      const currentUser = session?.user;
+      console.log("✅ Hydrated session user:", currentUser);
+
+      if (!currentUser) {
         setInlineError(t("loginError"));
         setLoading(false);
         return;
       }
-  
-      // 🧠 Make sure profile exists
-      const { data: profile } = await supabase
+
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("id")
-        .eq("id", user.id)
+        .eq("id", currentUser.id)
         .maybeSingle();
-  
+
+      console.log("📄 Profile check:", profile, profileError);
+
       if (!profile) {
         await supabase.from("profiles").insert([
           {
-            id: user.id,
-            email: user.email,
+            id: currentUser.id,
+            email: currentUser.email,
             is_subscribed: false,
             language,
           },
         ]);
+        console.log("🆕 Profile inserted for:", currentUser.email);
       }
-  
-      // 🎯 GTM tracking
+
       window.dataLayer?.push({
         event: isSignup ? "auth_email_signup" : "auth_email_login",
         email,
       });
-  
+
       localStorage.setItem("modalStep", "subscribe");
-      await setStepSmart(); // Move user to next step
+      await setStepSmart();
     } catch (err) {
-      console.error("🔥 Auth error:", err);
+      console.error("🔥 Email auth error:", err);
       setInlineError(t("loginError"));
     } finally {
-      setLoading(false); // ✅ Always stop loading
+      setLoading(false);
     }
-  };    
+  };
 
   const handleResetPassword = async () => {
     if (loading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -234,22 +279,24 @@ function DownloadModal({
     setSuccessMessage("");
 
     try {
+      console.log("🔁 Sending reset email to:", email);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (error) {
+        console.error("❌ Reset password error:", error);
         setInlineError(t("resetError"));
       } else {
+        console.log("✅ Reset email sent");
         setSuccessMessage(t("resetEmailSent"));
-
         window.dataLayer?.push({
           event: "auth_reset_requested",
           email,
         });
       }
     } catch (err) {
-      console.error("Reset password error:", err);
+      console.error("🔥 Reset email error:", err);
       setInlineError(t("resetError"));
     } finally {
       setLoading(false);
@@ -259,9 +306,10 @@ function DownloadModal({
   const handleGoogleLogin = async () => {
     if (loading) return;
     setLoading(true);
+
     try {
       localStorage.setItem("modalStep", step);
-
+      console.log("🟢 Starting Google login");
       window.dataLayer?.push({ event: "google_login_click" });
 
       const { error } = await supabase.auth.signInWithOAuth({
@@ -272,18 +320,18 @@ function DownloadModal({
       });
 
       if (error) {
-        console.error("Google login error:", error.message);
+        console.error("❌ Google login error:", error.message);
         setInlineError(t("loginError"));
       }
     } catch (err) {
-      console.error("Unexpected Google login error:", err);
+      console.error("🔥 Unexpected Google login error:", err);
       setInlineError(t("loginError"));
-    } finally {
-      // Don't unset loading here because user is redirected
     }
+    // no finally → user gets redirected
   };
 
   const handleSubscribe = () => {
+    console.log("🛒 Subscribing to plan:", selectedPlanData.id);
     localStorage.setItem("modalStep", "subscribe");
 
     window.dataLayer?.push({
@@ -308,10 +356,12 @@ function DownloadModal({
         cv_id: cvData?.id,
       });
 
+      console.log("📄 CV downloaded successfully");
       onDownload?.();
       onClose?.();
       localStorage.removeItem("modalStep");
-    } catch {
+    } catch (err) {
+      console.error("❌ CV download error:", err);
       setInlineError(t("downloadError"));
     } finally {
       setLoading(false);
@@ -342,121 +392,79 @@ function DownloadModal({
           aria-labelledby="modal-title"
           tabIndex={-1}
         >
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
-            aria-label={t("close")}
-          >
-            <XMarkIcon className="w-5 h-5" />
-          </button>
+          {/* Header and step tracker already shown in Part 1 */}
 
-          <div className="flex justify-center gap-4 text-xs text-gray-500 uppercase font-medium tracking-widest">
-            <span className={step === "login" ? "text-black font-semibold" : ""}>{t("stepLogin")}</span>
-            <span className="h-4 border-l border-gray-300"></span>
-            <span className={step === "subscribe" ? "text-black font-semibold" : ""}>{t("stepPlan")}</span>
-            <span className="h-4 border-l border-gray-300"></span>
-            <span className={step === "download" ? "text-black font-semibold" : ""}>{t("stepDownload")}</span>
-          </div>
+          {step === "subscribe" && (
+            <div>
+              <p className="text-center text-gray-600 text-sm mb-4">
+                {t("selectSubscriptionToProceed")}
+              </p>
 
-          <div className="transition-all duration-300 ease-in-out space-y-4" key={step}>
-            {inlineError && <div className="text-red-500 text-sm text-center">{inlineError}</div>}
-
-            {step === "login" && (
-              <div>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (emailMode === "reset") handleResetPassword();
-                    else handleEmailAuth();
-                  }}
-                >
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder={t("emailPlaceholder")}
-                    className="w-full border px-3 py-2 rounded-md text-sm mb-3"
-                  />
-
-                  {emailMode !== "reset" && (
-                    <div className="relative mb-3">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder={t("passwordPlaceholder")}
-                        className="w-full border px-3 py-2 rounded-md text-sm pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
-                        tabIndex={-1}
-                      >
-                        {showPassword ? (
-                          <EyeSlashIcon className="w-5 h-5" />
-                        ) : (
-                          <EyeIcon className="w-5 h-5" />
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {successMessage && (
-                    <p className="text-xs text-green-600 text-center">{successMessage}</p>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition flex items-center justify-center"
-                  >
-                    {loading ? (
-                      <>
-                        <span className="loader mr-2" />
-                        {t("loading")}...
-                      </>
-                    ) : (
-                      emailMode === "reset" ? t("sendResetLink") : t(emailMode)
-                    )}
-                  </button>
-                </form>
-
-                <div className="flex justify-between text-xs text-blue-600 mt-2 underline cursor-pointer">
-                  <span onClick={() => setEmailMode(emailMode === "signup" ? "login" : "signup")}>
-                    {emailMode === "signup" ? t("alreadyHaveAccount") : t("createAccount")}
-                  </span>
-                  <span onClick={() => setEmailMode("reset")}>{t("forgotPassword")}</span>
-                </div>
-
-                <div className="relative py-3">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-300"></div>
-                  </div>
-                  <div className="relative text-center text-xs text-gray-500 bg-white w-fit mx-auto px-2">
-                    {t("orContinueWith")}
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleGoogleLogin}
-                  className="w-full border border-gray-300 text-gray-800 py-2 rounded-md hover:bg-gray-50 flex items-center justify-center gap-2"
-                  disabled={loading}
-                >
-                  <img
-                    src="https://authjs.dev/img/providers/google.svg"
-                    alt="Google"
-                    className="w-4 h-4"
-                  />
-                  {loading ? `${t("loading")}...` : t("continueWithGoogle")}
-                </button>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {plans.map((plan) => {
+                  const isSelected = selectedPlan === plan.id;
+                  return (
+                    <button
+                      key={plan.id}
+                      onClick={() => {
+                        setSelectedPlan(plan.id);
+                        console.log("📦 Selected plan:", plan.id);
+                        window.dataLayer?.push({
+                          event: "plan_selected",
+                          plan_id: plan.id,
+                          plan_label: t(plan.labelKey),
+                        });
+                      }}
+                      className={`relative border rounded-xl p-4 text-left transition text-sm ${
+                        isSelected
+                          ? "border-blue-600 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <div className="font-semibold text-gray-800">{t(plan.labelKey)}</div>
+                      <div className="text-xs text-gray-500 mt-1">{t(plan.descriptionKey)}</div>
+                      {plan.popular && (
+                        <span className="absolute top-2 right-2 text-[10px] bg-yellow-400 text-white font-semibold px-2 py-0.5 rounded-full shadow">
+                          {t("mostPopular")}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-            )}
 
-            {/* Subscribe and Download steps stay unchanged */}
-            {/* ... */}
+              <button
+                onClick={handleSubscribe}
+                disabled={loading}
+                className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 mt-6"
+              >
+                {loading ? t("loading") + "..." : t("try3DaysFor", { price: "€1,95" })}
+              </button>
 
-          </div>
+              <div className="flex items-center justify-center mt-3 gap-2 text-xs text-gray-400">
+                <img src="/stripe.svg" alt="Stripe" className="h-4" />
+                <span>{t("secureStripeCheckout")}</span>
+              </div>
+            </div>
+          )}
+
+          {step === "download" && (
+            <div className="text-center space-y-4">
+              <div className="text-4xl">✅</div>
+              <h3 className="text-lg font-semibold text-gray-800">{t("readyToDownload")}</h3>
+              <p className="text-sm text-gray-600">{t("clickToDownload")}</p>
+
+              <button
+                onClick={handleDownload}
+                disabled={loading}
+                className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition"
+              >
+                {loading ? t("loading") + "..." : t("downloadNow")}
+              </button>
+
+              <p className="text-[11px] text-gray-400">{t("downloadHelpText")}</p>
+            </div>
+          )}
         </div>
       </div>
 

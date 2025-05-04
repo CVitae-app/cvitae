@@ -17,25 +17,30 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch current user + profile on mount
   useEffect(() => {
     let isMounted = true;
 
     const initializeAuth = async () => {
+      console.log("🔄 Initializing auth...");
+
       try {
         const { data, error } = await supabase.auth.getUser();
+        console.log("🔐 getUser:", { data, error });
+
         if (error && error.message !== "Auth session missing!") {
-          console.error("Error fetching user:", error.message);
+          console.error("🚨 Error fetching user:", error.message);
         }
 
         const currentUser = data?.user || null;
 
         if (currentUser) {
-          const { data: profile } = await supabase
+          const { data: profile, error: profileErr } = await supabase
             .from("profiles")
             .select("language, first_name")
             .eq("id", currentUser.id)
             .single();
+
+          console.log("📄 Profile on init:", { profile, profileErr });
 
           const enrichedUser = {
             ...currentUser,
@@ -46,13 +51,15 @@ export const AuthProvider = ({ children }) => {
           if (isMounted) {
             setUser(enrichedUser);
             localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
+            console.log("✅ Auth set on mount:", enrichedUser);
           }
         } else if (isMounted) {
           setUser(null);
           localStorage.removeItem("auth_user");
+          console.log("🚫 No user session found on init.");
         }
       } catch (err) {
-        console.error("Unexpected auth error:", err);
+        console.error("🔥 Unexpected error during auth init:", err);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -62,7 +69,8 @@ export const AuthProvider = ({ children }) => {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setLoading(true); // ⬅️ Ensure UI shows loading during state change
+        console.log("📣 Auth state change:", event, session);
+        setLoading(true);
 
         try {
           const newUser = session?.user || null;
@@ -71,15 +79,15 @@ export const AuthProvider = ({ children }) => {
             const language = navigator.language.startsWith("nl") ? "nl" : "en";
             const firstName = newUser.user_metadata?.firstName || "there";
 
-            // Save profile
-            await supabase.from("profiles").upsert({
+            const { error: upsertErr } = await supabase.from("profiles").upsert({
               id: newUser.id,
               email: newUser.email,
               language,
               first_name: firstName,
             });
 
-            // Send welcome email
+            console.log("📝 Profile upsert after sign up:", upsertErr || "Success");
+
             const trialStart = dayjs().locale(language).format("D MMMM YYYY");
             const trialEnd = dayjs().add(3, "day").locale(language).format("D MMMM YYYY");
 
@@ -92,14 +100,17 @@ export const AuthProvider = ({ children }) => {
               support_url: "https://cvitae.io/help",
               year: String(new Date().getFullYear()),
             });
+            console.log("📧 Welcome email sent");
           }
 
           if (newUser) {
-            const { data: profile } = await supabase
+            const { data: profile, error: profileErr } = await supabase
               .from("profiles")
               .select("language, first_name")
               .eq("id", newUser.id)
               .single();
+
+            console.log("📄 Profile after state change:", { profile, profileErr });
 
             const enrichedUser = {
               ...newUser,
@@ -109,14 +120,16 @@ export const AuthProvider = ({ children }) => {
 
             setUser(enrichedUser);
             localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
+            console.log("✅ Auth set from listener:", enrichedUser);
           } else {
             setUser(null);
             localStorage.removeItem("auth_user");
+            console.log("🔕 User signed out or session expired");
           }
         } catch (err) {
-          console.error("onAuthStateChange error:", err);
+          console.error("❌ onAuthStateChange error:", err);
         } finally {
-          setLoading(false); // ⬅️ Resume app
+          setLoading(false);
         }
       }
     );
@@ -132,8 +145,9 @@ export const AuthProvider = ({ children }) => {
       await supabase.auth.signOut();
       setUser(null);
       localStorage.removeItem("auth_user");
+      console.log("👋 Logged out.");
     } catch (err) {
-      console.error("Logout error:", err);
+      console.error("❌ Logout error:", err);
     }
   }, []);
 
