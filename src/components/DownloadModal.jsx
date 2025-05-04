@@ -303,6 +303,7 @@ function DownloadModal({
   };
 
   const handleSubscribe = () => {
+    setLoading(false);
     localStorage.setItem("modalStep", "subscribe");
     window.dataLayer?.push({
       event: "subscribe_click",
@@ -310,7 +311,7 @@ function DownloadModal({
       plan_label: t(selectedPlanData.labelKey),
     });
     window.location.href = selectedPlanData.checkoutUrl;
-  };
+  };  
 
   const handleDownload = async () => {
     setLoading(true);
