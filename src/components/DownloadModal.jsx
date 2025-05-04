@@ -94,44 +94,57 @@ function DownloadModal({
 
   useEffect(() => {
     if (!isOpen) return;
-
-    console.log("📥 [useEffect] Modal opened. Checking user and modal step...");
+  
+    console.log("📥 Modal opened. Checking context and localStorage...");
+  
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
     const savedStep = localStorage.getItem("modalStep");
-
+  
     const init = async () => {
-      if (user?.email) {
-        console.log("📧 Setting email from user context:", user.email);
-        setEmail(user.email);
-        localStorage.setItem("lastEmail", user.email);
+      // Wait for Supabase to hydrate the session
+      let session = null;
+      for (let i = 0; i < 10; i++) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.user) {
+          session = data.session;
+          break;
+        }
+        console.log("⏳ Waiting for session...");
+        await new Promise((r) => setTimeout(r, 250));
       }
-
+  
+      console.log("✅ Hydrated session in modal:", session?.user);
+  
+      if (session?.user?.email) {
+        setEmail(session.user.email);
+        localStorage.setItem("lastEmail", session.user.email);
+      }
+  
       if (fromProfileMenu) {
-        console.log("👤 Opened from profile menu → Login step");
+        console.log("👤 Opened from profile menu → login step");
         return setStep("login");
       }
-
+  
       if (startAtSubscribe || fromStripe) {
-        console.log("💳 Coming from Stripe or startAtSubscribe → Subscribe step");
+        console.log("💳 Coming from Stripe or AccountSettings → skip to subscribe");
         window.dataLayer?.push({
           event: "returned_from_stripe",
-          user_id: user?.id || "anonymous",
+          user_id: session?.user?.id || "anonymous",
         });
         return setStep("subscribe");
       }
-
+  
       if (savedStep === "subscribe" || savedStep === "download") {
-        console.log("💾 Found saved step in localStorage:", savedStep);
+        console.log("💾 Restoring step from localStorage:", savedStep);
         await setStepSmart();
       } else {
-        console.log("🔐 Defaulting to login step");
-        setStep("login");
+        await setStepSmart(); // 👈 force smart check instead of defaulting to login
       }
     };
-
+  
     init();
-  }, [isOpen, fromProfileMenu, startAtSubscribe, setStepSmart, user]);
+  }, [isOpen, fromProfileMenu, startAtSubscribe, setStepSmart]);  
 
   useEffect(() => {
     const handler = (e) => {
