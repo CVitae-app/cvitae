@@ -93,7 +93,14 @@ function DownloadModal({
 
     const init = async () => {
       if (fromProfileMenu) return setStep("login");
-      if (startAtSubscribe || fromStripe) return setStep("subscribe");
+
+      if (startAtSubscribe || fromStripe) {
+        window.dataLayer?.push({
+          event: "returned_from_stripe",
+          user_id: user?.id || "anonymous",
+        });
+        return setStep("subscribe");
+      }
 
       if (savedStep === "subscribe" || savedStep === "download") {
         await setStepSmart();
@@ -103,7 +110,7 @@ function DownloadModal({
     };
 
     init();
-  }, [isOpen, fromProfileMenu, startAtSubscribe, setStepSmart]);
+  }, [isOpen, fromProfileMenu, startAtSubscribe, setStepSmart, user]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -149,40 +156,39 @@ function DownloadModal({
     setInlineError("");
     setSuccessMessage("");
     localStorage.setItem("lastEmail", email);
-  
+
     const isSignup = emailMode === "signup";
-  
+
     try {
       const { error: authError } = isSignup
         ? await supabase.auth.signUp({ email, password })
         : await supabase.auth.signInWithPassword({ email, password });
-  
+
       if (authError) {
         setInlineError(authError.message);
         return;
       }
-  
-      // 🕒 Wait for session to be fully ready
+
       for (let i = 0; i < 10; i++) {
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData?.session?.user) break;
-        await new Promise((r) => setTimeout(r, 250)); // retry up to 2.5s
+        await new Promise((r) => setTimeout(r, 250));
       }
-  
+
       const { data: sessionData } = await supabase.auth.getSession();
       const user = sessionData?.session?.user;
-  
+
       if (!user) {
         setInlineError(t("loginError"));
         return;
       }
-  
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("id")
         .eq("id", user.id)
         .maybeSingle();
-  
+
       if (!profile) {
         await supabase.from("profiles").insert([
           {
@@ -192,7 +198,7 @@ function DownloadModal({
           },
         ]);
       }
-  
+
       localStorage.setItem("modalStep", "subscribe");
       await setStepSmart();
     } catch {
@@ -200,7 +206,7 @@ function DownloadModal({
     } finally {
       setLoading(false);
     }
-  };  
+  };
 
   const handleResetPassword = async () => {
     if (!validate()) return;
@@ -220,6 +226,14 @@ function DownloadModal({
 
   const handleSubscribe = () => {
     localStorage.setItem("modalStep", "subscribe");
+
+    // ✅ GTM: Track subscribe button click
+    window.dataLayer?.push({
+      event: "subscribe_click",
+      plan_id: selectedPlanData.id,
+      plan_label: t(selectedPlanData.labelKey),
+    });
+
     window.location.href = selectedPlanData.checkoutUrl;
   };
 
@@ -229,6 +243,14 @@ function DownloadModal({
       const personal = cvData?.data?.personal || {};
       await new Promise((r) => setTimeout(r, 300));
       await downloadCV(previewRef.current, personal);
+
+      // ✅ GTM: Track CV download
+      window.dataLayer?.push({
+        event: "cv_download",
+        user_id: user?.id || "anonymous",
+        cv_id: cvData?.id,
+      });
+
       onDownload?.();
       onClose?.();
       localStorage.removeItem("modalStep");
@@ -357,7 +379,16 @@ function DownloadModal({
                     return (
                       <button
                         key={plan.id}
-                        onClick={() => setSelectedPlan(plan.id)}
+                        onClick={() => {
+                          setSelectedPlan(plan.id);
+
+                          // ✅ GTM: Track plan selection
+                          window.dataLayer?.push({
+                            event: "plan_selected",
+                            plan_id: plan.id,
+                            plan_label: t(plan.labelKey),
+                          });
+                        }}
                         className={`relative border rounded-xl p-4 text-left transition text-sm ${
                           isSelected ? "border-blue-600 bg-blue-50" : "border-gray-200 hover:border-gray-300"
                         }`}
