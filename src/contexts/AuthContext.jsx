@@ -31,7 +31,6 @@ export const AuthProvider = ({ children }) => {
         const currentUser = data?.user || null;
 
         if (currentUser) {
-          // Fetch language from profile
           const { data: profile } = await supabase
             .from("profiles")
             .select("language, first_name")
@@ -63,56 +62,61 @@ export const AuthProvider = ({ children }) => {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        const newUser = session?.user || null;
+        setLoading(true); // ⬅️ Ensure UI shows loading during state change
 
-        if (event === "SIGNED_UP" && newUser) {
-          const language = navigator.language.startsWith("nl") ? "nl" : "en";
-          const firstName = newUser.user_metadata?.firstName || "there";
+        try {
+          const newUser = session?.user || null;
 
-          // Store language and name in profiles
-          await supabase.from("profiles").upsert({
-            id: newUser.id,
-            email: newUser.email,
-            language,
-            first_name: firstName,
-          });
+          if (event === "SIGNED_UP" && newUser) {
+            const language = navigator.language.startsWith("nl") ? "nl" : "en";
+            const firstName = newUser.user_metadata?.firstName || "there";
 
-          // Format dates for welcome email
-          const locale = language === "nl" ? "nl" : "en";
-          const trialStart = dayjs().locale(locale).format("D MMMM YYYY");
-          const trialEnd = dayjs().add(3, "day").locale(locale).format("D MMMM YYYY");
+            // Save profile
+            await supabase.from("profiles").upsert({
+              id: newUser.id,
+              email: newUser.email,
+              language,
+              first_name: firstName,
+            });
 
-          // Send welcome email
-          await sendEmail(newUser.email, language, "welcome", {
-            name: firstName,
-            trial_length: "3",
-            trial_start_date: trialStart,
-            trial_end_date: trialEnd,
-            action_url: "https://app.cvitae.io/dashboard",
-            support_url: "https://cvitae.io/help",
-            year: String(new Date().getFullYear()),
-          });
-        }
+            // Send welcome email
+            const trialStart = dayjs().locale(language).format("D MMMM YYYY");
+            const trialEnd = dayjs().add(3, "day").locale(language).format("D MMMM YYYY");
 
-        // On any auth state change, fetch full user data from profiles
-        if (newUser) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("language, first_name")
-            .eq("id", newUser.id)
-            .single();
+            await sendEmail(newUser.email, language, "welcome", {
+              name: firstName,
+              trial_length: "3",
+              trial_start_date: trialStart,
+              trial_end_date: trialEnd,
+              action_url: "https://app.cvitae.io/dashboard",
+              support_url: "https://cvitae.io/help",
+              year: String(new Date().getFullYear()),
+            });
+          }
 
-          const enrichedUser = {
-            ...newUser,
-            language: profile?.language || "en",
-            firstName: profile?.first_name || "there",
-          };
+          if (newUser) {
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("language, first_name")
+              .eq("id", newUser.id)
+              .single();
 
-          setUser(enrichedUser);
-          localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
-        } else {
-          setUser(null);
-          localStorage.removeItem("auth_user");
+            const enrichedUser = {
+              ...newUser,
+              language: profile?.language || "en",
+              firstName: profile?.first_name || "there",
+            };
+
+            setUser(enrichedUser);
+            localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
+          } else {
+            setUser(null);
+            localStorage.removeItem("auth_user");
+          }
+        } catch (err) {
+          console.error("onAuthStateChange error:", err);
+        } finally {
+          setLoading(false); // ⬅️ Resume app
         }
       }
     );
