@@ -62,21 +62,16 @@ function DownloadModal({
   const selectedPlanData = useMemo(() => plans.find((p) => p.id === selectedPlan), [selectedPlan]);
 
   const setStepSmart = useCallback(async () => {
-    console.log("🔍 [setStepSmart] Checking current session...");
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const currentUser = sessionData?.session?.user;
-      console.log("🧠 Session user:", currentUser);
-
       if (!currentUser) return setStep("login");
 
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
         .select("is_subscribed")
         .eq("id", currentUser.id)
         .maybeSingle();
-
-      console.log("📋 Profile subscription check:", profile);
 
       const subscribed = profile?.is_subscribed === true;
       if (subscribed) {
@@ -85,8 +80,7 @@ function DownloadModal({
       } else {
         setStep("subscribe");
       }
-    } catch (err) {
-      console.error("❌ Error in setStepSmart:", err);
+    } catch {
       setInlineError("Something went wrong.");
       setStep("subscribe");
     }
@@ -94,15 +88,12 @@ function DownloadModal({
 
   useEffect(() => {
     if (!isOpen) return;
-  
-    console.log("📥 Modal opened. Checking context and localStorage...");
-  
+
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
     const savedStep = localStorage.getItem("modalStep");
-  
+
     const init = async () => {
-      // Wait for Supabase to hydrate the session
       let session = null;
       for (let i = 0; i < 10; i++) {
         const { data } = await supabase.auth.getSession();
@@ -110,41 +101,28 @@ function DownloadModal({
           session = data.session;
           break;
         }
-        console.log("⏳ Waiting for session...");
         await new Promise((r) => setTimeout(r, 250));
       }
-  
-      console.log("✅ Hydrated session in modal:", session?.user);
-  
+
       if (session?.user?.email) {
         setEmail(session.user.email);
         localStorage.setItem("lastEmail", session.user.email);
       }
-  
-      if (fromProfileMenu) {
-        console.log("👤 Opened from profile menu → login step");
-        return setStep("login");
-      }
-  
+
+      if (fromProfileMenu) return setStep("login");
       if (startAtSubscribe || fromStripe) {
-        console.log("💳 Coming from Stripe or AccountSettings → skip to subscribe");
         window.dataLayer?.push({
           event: "returned_from_stripe",
           user_id: session?.user?.id || "anonymous",
         });
         return setStep("subscribe");
       }
-  
-      if (savedStep === "subscribe" || savedStep === "download") {
-        console.log("💾 Restoring step from localStorage:", savedStep);
-        await setStepSmart();
-      } else {
-        await setStepSmart(); // 👈 force smart check instead of defaulting to login
-      }
+
+      await setStepSmart();
     };
-  
+
     init();
-  }, [isOpen, fromProfileMenu, startAtSubscribe, setStepSmart]);  
+  }, [isOpen, fromProfileMenu, startAtSubscribe, setStepSmart]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -161,8 +139,6 @@ function DownloadModal({
 
   useEffect(() => {
     if (!isOpen) return;
-    console.log("🔄 Resetting modal form state...");
-
     setStep("login");
     setEmailMode("signup");
     setEmail(localStorage.getItem("lastEmail") || "");
@@ -189,23 +165,26 @@ function DownloadModal({
 
   const handleEmailAuth = async () => {
     if (loading || !validate()) return;
-
-    console.log("🚀 Starting email auth:", { email, password, emailMode });
+  
     setLoading(true);
     setInlineError("");
     setSuccessMessage("");
-
+  
     if (loginAttempts >= 5) {
-      setInlineError(t("tooManyAttempts") || "Too many failed attempts. Please try again later.");
+      setInlineError(t("tooManyAttempts"));
       setLoading(false);
       return;
     }
-
+  
     localStorage.setItem("lastEmail", email);
     const isSignup = emailMode === "signup";
     const language = navigator.language.startsWith("nl") ? "nl" : "en";
-
+  
     try {
+      if (!isSignup) {
+        await supabase.auth.signOut(); // logout before logging in
+      }
+  
       const { data, error } = isSignup
         ? await supabase.auth.signUp({
             email,
@@ -213,17 +192,14 @@ function DownloadModal({
             options: { data: { language } },
           })
         : await supabase.auth.signInWithPassword({ email, password });
-
-      console.log("🟢 Supabase auth response:", { data, error });
-
+  
       if (error) {
-        console.warn("⚠️ Login/signup error:", error.message);
         setLoginAttempts((prev) => prev + 1);
         setInlineError(error.message);
         setLoading(false);
         return;
       }
-
+  
       let session = null;
       for (let i = 0; i < 10; i++) {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -231,27 +207,22 @@ function DownloadModal({
           session = sessionData.session;
           break;
         }
-        console.log(`⏳ Session check ${i + 1}/10: no user yet`);
         await new Promise((r) => setTimeout(r, 250));
       }
-
+  
       const currentUser = session?.user;
-      console.log("✅ Final session user:", currentUser);
-
       if (!currentUser) {
         setInlineError(t("loginError"));
         setLoading(false);
         return;
       }
-
-      const { data: profile, error: profileError } = await supabase
+  
+      const { data: profile } = await supabase
         .from("profiles")
         .select("id")
         .eq("id", currentUser.id)
         .maybeSingle();
-
-      console.log("📄 Profile fetch result:", profile, profileError);
-
+  
       if (!profile) {
         await supabase.from("profiles").insert([
           {
@@ -261,24 +232,22 @@ function DownloadModal({
             language,
           },
         ]);
-        console.log("🆕 Created new profile for:", currentUser.email);
       }
-
+  
       window.dataLayer?.push({
         event: isSignup ? "auth_email_signup" : "auth_email_login",
         email,
       });
-
+  
       localStorage.setItem("modalStep", "subscribe");
       await setStepSmart();
-    } catch (err) {
-      console.error("🔥 Unexpected auth error:", err);
+    } catch {
       setInlineError(t("loginError"));
     } finally {
       setLoading(false);
     }
   };
-
+  
   const handleResetPassword = async () => {
     if (loading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       setErrors({ email: t("invalidEmail") });
@@ -290,25 +259,17 @@ function DownloadModal({
     setSuccessMessage("");
 
     try {
-      console.log("🔁 Sending password reset to:", email);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (error) {
-        console.error("❌ Reset error:", error.message);
         setInlineError(t("resetError"));
       } else {
-        console.log("✅ Reset email sent");
         setSuccessMessage(t("resetEmailSent"));
-
-        window.dataLayer?.push({
-          event: "auth_reset_requested",
-          email,
-        });
+        window.dataLayer?.push({ event: "auth_reset_requested", email });
       }
-    } catch (err) {
-      console.error("🔥 Reset catch error:", err);
+    } catch {
       setInlineError(t("resetError"));
     } finally {
       setLoading(false);
@@ -316,37 +277,30 @@ function DownloadModal({
   };
 
   const handleSubscribe = () => {
-    console.log("🛒 Subscribing to:", selectedPlanData.id);
     localStorage.setItem("modalStep", "subscribe");
-
     window.dataLayer?.push({
       event: "subscribe_click",
       plan_id: selectedPlanData.id,
       plan_label: t(selectedPlanData.labelKey),
     });
-
     window.location.href = selectedPlanData.checkoutUrl;
   };
 
   const handleDownload = async () => {
     setLoading(true);
     try {
-      console.log("📄 Downloading CV...");
       const personal = cvData?.data?.personal || {};
       await new Promise((r) => setTimeout(r, 300));
       await downloadCV(previewRef.current, personal);
-
       window.dataLayer?.push({
         event: "cv_download",
         user_id: user?.id || "anonymous",
         cv_id: cvData?.id,
       });
-
       onDownload?.();
       onClose?.();
       localStorage.removeItem("modalStep");
-    } catch (err) {
-      console.error("❌ Download error:", err);
+    } catch {
       setInlineError(t("downloadError"));
     } finally {
       setLoading(false);
@@ -412,7 +366,6 @@ function DownloadModal({
                     placeholder={t("emailPlaceholder")}
                     className="w-full border px-3 py-2 rounded-md text-sm mb-3"
                   />
-
                   {emailMode !== "reset" && (
                     <div className="relative mb-3">
                       <input
@@ -428,19 +381,11 @@ function DownloadModal({
                         className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
                         tabIndex={-1}
                       >
-                        {showPassword ? (
-                          <EyeSlashIcon className="w-5 h-5" />
-                        ) : (
-                          <EyeIcon className="w-5 h-5" />
-                        )}
+                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
                       </button>
                     </div>
                   )}
-
-                  {successMessage && (
-                    <p className="text-xs text-green-600 text-center">{successMessage}</p>
-                  )}
-
+                  {successMessage && <p className="text-xs text-green-600 text-center">{successMessage}</p>}
                   <button
                     type="submit"
                     disabled={loading}
@@ -474,9 +419,6 @@ function DownloadModal({
                 </div>
 
                 <button
-                  onClick={() => {
-                    console.log("❌ Google login skipped in this version");
-                  }}
                   disabled
                   className="w-full border border-gray-300 text-gray-400 py-2 rounded-md cursor-not-allowed flex items-center justify-center gap-2"
                 >
@@ -495,7 +437,6 @@ function DownloadModal({
                 <p className="text-center text-gray-600 text-sm mb-4">
                   {t("selectSubscriptionToProceed")}
                 </p>
-
                 <div className="grid sm:grid-cols-2 gap-4">
                   {plans.map((plan) => {
                     const isSelected = selectedPlan === plan.id;
@@ -504,7 +445,6 @@ function DownloadModal({
                         key={plan.id}
                         onClick={() => {
                           setSelectedPlan(plan.id);
-                          console.log("📦 Selected plan:", plan.id);
                           window.dataLayer?.push({
                             event: "plan_selected",
                             plan_id: plan.id,
@@ -528,7 +468,6 @@ function DownloadModal({
                     );
                   })}
                 </div>
-
                 <button
                   onClick={handleSubscribe}
                   disabled={loading}
@@ -536,7 +475,6 @@ function DownloadModal({
                 >
                   {loading ? t("loading") + "..." : t("try3DaysFor", { price: "€1,95" })}
                 </button>
-
                 <div className="flex items-center justify-center mt-3 gap-2 text-xs text-gray-400">
                   <img src="/stripe.svg" alt="Stripe" className="h-4" />
                   <span>{t("secureStripeCheckout")}</span>
@@ -549,7 +487,6 @@ function DownloadModal({
                 <div className="text-4xl">✅</div>
                 <h3 className="text-lg font-semibold text-gray-800">{t("readyToDownload")}</h3>
                 <p className="text-sm text-gray-600">{t("clickToDownload")}</p>
-
                 <button
                   onClick={handleDownload}
                   disabled={loading}
@@ -557,7 +494,6 @@ function DownloadModal({
                 >
                   {loading ? t("loading") + "..." : t("downloadNow")}
                 </button>
-
                 <p className="text-[11px] text-gray-400">{t("downloadHelpText")}</p>
               </div>
             )}
