@@ -7,6 +7,10 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error("❌ Supabase environment variables are missing.");
 }
 
+if (typeof window !== "undefined") {
+  window.supabase = supabase;
+}
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,

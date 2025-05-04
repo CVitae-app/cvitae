@@ -86,6 +86,12 @@ function DownloadModal({
   }, [user]);  
 
   useEffect(() => {
+    if (isOpen && user && step === "login") {
+      setStepSmart();
+    }
+  }, [isOpen, user, step, setStepSmart]);
+
+  useEffect(() => {
     if (!isOpen) return;
 
     if (isOpen && user && step === "login") {
