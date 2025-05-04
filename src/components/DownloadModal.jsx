@@ -177,51 +177,59 @@ function DownloadModal({
 
   const handleEmailAuth = async () => {
     if (loading || !validate()) return;
-
+  
     setLoading(true);
     setInlineError("");
     setSuccessMessage("");
-
+  
     if (loginAttempts >= 5) {
       setInlineError(t("tooManyAttempts"));
       setLoading(false);
       return;
     }
-
+  
     localStorage.setItem("lastEmail", email);
     const isSignup = emailMode === "signup";
     const language = navigator.language.startsWith("nl") ? "nl" : "en";
-
+  
     try {
       if (!isSignup) {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut(); // ensure clean login
       }
-
-      const { data, error } = isSignup
+  
+      const { error } = isSignup
         ? await supabase.auth.signUp({
             email,
             password,
             options: { data: { language } },
           })
         : await supabase.auth.signInWithPassword({ email, password });
-
+  
       if (error) {
         setLoginAttempts((prev) => prev + 1);
         setInlineError(error.message);
         setLoading(false);
         return;
       }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const currentUser = sessionData?.session?.user;
-
+  
+      // ✅ Use fresh user from Supabase
+      let currentUser = null;
+      for (let i = 0; i < 10; i++) {
+        const { data } = await supabase.auth.getUser();
+        if (data?.user) {
+          currentUser = data.user;
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+      }
+  
       if (currentUser) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("id")
           .eq("id", currentUser.id)
           .maybeSingle();
-
+  
         if (!profile) {
           await supabase.from("profiles").insert([
             {
@@ -232,23 +240,23 @@ function DownloadModal({
             },
           ]);
         }
-
+  
         window.dataLayer?.push({
           event: isSignup ? "auth_email_signup" : "auth_email_login",
           email,
         });
+  
+        await supabase.auth.refreshSession(); // force refresh
+        await setStepSmart(); // move to next step
+      } else {
+        setInlineError("Login failed — please try again.");
       }
-
-      await supabase.auth.refreshSession();
-      setTimeout(async () => {
-        await setStepSmart();
-      }, 800);
     } catch {
       setInlineError(t("loginError"));
     } finally {
       setLoading(false);
     }
-  };
+  };  
 
   const handleGoogleLogin = async () => {
     try {
