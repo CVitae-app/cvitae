@@ -62,17 +62,16 @@ function DownloadModal({
   const selectedPlanData = useMemo(() => plans.find((p) => p.id === selectedPlan), [selectedPlan]);
 
   const setStepSmart = useCallback(async () => {
+    const currentUser = user;
+    if (!currentUser) return setStep("login");
+  
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const currentUser = sessionData?.session?.user;
-      if (!currentUser) return setStep("login");
-
       const { data: profile } = await supabase
         .from("profiles")
         .select("is_subscribed")
         .eq("id", currentUser.id)
         .maybeSingle();
-
+  
       const subscribed = profile?.is_subscribed === true;
       if (subscribed) {
         localStorage.removeItem("modalStep");
@@ -84,7 +83,7 @@ function DownloadModal({
       setInlineError("Something went wrong.");
       setStep("subscribe");
     }
-  }, []);
+  }, [user]);  
 
   useEffect(() => {
     if (!isOpen) return;
