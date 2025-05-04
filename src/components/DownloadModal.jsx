@@ -88,6 +88,12 @@ function DownloadModal({
   useEffect(() => {
     if (!isOpen) return;
 
+    if (isOpen && user && step === "login") {
+      localStorage.removeItem("modalStep");
+      setStepSmart();
+      return;
+    }    
+
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
     const savedStep = localStorage.getItem("modalStep");
