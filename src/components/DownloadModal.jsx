@@ -54,6 +54,7 @@ function DownloadModal({
   const [showPassword, setShowPassword] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("1month");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [inlineError, setInlineError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -93,6 +94,12 @@ function DownloadModal({
 
   useEffect(() => {
     if (!isOpen) return;
+
+    if (isOpen && user && step === "login") {
+      localStorage.removeItem("modalStep");
+      setStepSmart();
+      return;
+    }
 
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
@@ -151,6 +158,7 @@ function DownloadModal({
     setInlineError("");
     setSuccessMessage("");
     setLoading(false);
+    setGoogleLoading(false);
     setLoginAttempts(0);
     setShowPassword(false);
   }, [isOpen]);
@@ -239,6 +247,28 @@ function DownloadModal({
       setInlineError(t("loginError"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      setGoogleLoading(true);
+      setInlineError("");
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) {
+        setInlineError(error.message);
+      } else {
+        window.dataLayer?.push({ event: "auth_google_login" });
+      }
+    } catch {
+      setInlineError(t("loginError"));
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -345,54 +375,56 @@ function DownloadModal({
             {inlineError && <div className="text-red-500 text-sm text-center">{inlineError}</div>}
 
             {step === "login" && (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (emailMode === "reset") handleResetPassword();
-                  else handleEmailAuth();
-                }}
-              >
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={t("emailPlaceholder")}
-                  className="w-full border px-3 py-2 rounded-md text-sm mb-3"
-                />
-                {emailMode !== "reset" && (
-                  <div className="relative mb-3">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder={t("passwordPlaceholder")}
-                      className="w-full border px-3 py-2 rounded-md text-sm pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-                    </button>
-                  </div>
-                )}
-                {successMessage && <p className="text-xs text-green-600 text-center">{successMessage}</p>}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition flex items-center justify-center"
+              <div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (emailMode === "reset") handleResetPassword();
+                    else handleEmailAuth();
+                  }}
                 >
-                  {loading ? (
-                    <>
-                      <span className="loader mr-2" />
-                      {t("loading")}...
-                    </>
-                  ) : (
-                    emailMode === "reset" ? t("sendResetLink") : t(emailMode)
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={t("emailPlaceholder")}
+                    className="w-full border px-3 py-2 rounded-md text-sm mb-3"
+                  />
+                  {emailMode !== "reset" && (
+                    <div className="relative mb-3">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder={t("passwordPlaceholder")}
+                        className="w-full border px-3 py-2 rounded-md text-sm pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((prev) => !prev)}
+                        className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
+                        tabIndex={-1}
+                      >
+                        {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+                      </button>
+                    </div>
                   )}
-                </button>
+                  {successMessage && <p className="text-xs text-green-600 text-center">{successMessage}</p>}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition flex items-center justify-center"
+                  >
+                    {loading ? (
+                      <>
+                        <span className="loader mr-2" />
+                        {t("loading")}...
+                      </>
+                    ) : (
+                      emailMode === "reset" ? t("sendResetLink") : t(emailMode)
+                    )}
+                  </button>
+                </form>
 
                 <div className="flex justify-between text-xs text-blue-600 mt-2 underline cursor-pointer">
                   <span onClick={() => setEmailMode(emailMode === "signup" ? "login" : "signup")}>
@@ -400,7 +432,31 @@ function DownloadModal({
                   </span>
                   <span onClick={() => setEmailMode("reset")}>{t("forgotPassword")}</span>
                 </div>
-              </form>
+
+                <div className="relative py-3">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-300"></div>
+                  </div>
+                  <div className="relative text-center text-xs text-gray-500 bg-white w-fit mx-auto px-2">
+                    {t("orContinueWith")}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleGoogleLogin}
+                  disabled={googleLoading}
+                  className={`w-full border border-gray-300 py-2 rounded-md flex items-center justify-center gap-2 ${
+                    googleLoading ? "opacity-60" : ""
+                  }`}
+                >
+                  <img
+                    src="https://authjs.dev/img/providers/google.svg"
+                    alt="Google"
+                    className="w-4 h-4"
+                  />
+                  {googleLoading ? t("loading") + "..." : t("continueWithGoogle")}
+                </button>
+              </div>
             )}
 
             {step === "subscribe" && (
