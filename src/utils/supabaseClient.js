@@ -7,10 +7,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.error("❌ Supabase environment variables are missing.");
 }
 
-if (typeof window !== "undefined") {
-  window.supabase = supabase;
-}
-
+// ✅ Create the client first
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -19,3 +16,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: localStorage,
   },
 });
+
+// ✅ THEN expose it for debugging
+if (typeof window !== "undefined") {
+  window.supabase = supabase;
+}
