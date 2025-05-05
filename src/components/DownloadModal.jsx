@@ -494,11 +494,6 @@ function DownloadModal({
                       >
                         <div className="font-semibold text-gray-800">{t(plan.labelKey)}</div>
                         <div className="text-xs text-gray-500 mt-1">{t(plan.descriptionKey)}</div>
-                        {plan.popular && (
-                          <span className="absolute top-2 right-2 text-[10px] bg-yellow-400 text-white font-semibold px-2 py-0.5 rounded-full shadow">
-                            {t("mostPopular")}
-                          </span>
-                        )}
                       </button>
                     );
                   })}
@@ -511,7 +506,11 @@ function DownloadModal({
                   {loading ? t("loading") + "..." : t("try3DaysFor", { price: "€1,95" })}
                 </button>
                 <div className="flex items-center justify-center mt-3 gap-2 text-xs text-gray-400">
-                  <img src="/stripe.svg" alt="Stripe" className="h-4" />
+                <img
+  src="https://upload.wikimedia.org/wikipedia/commons/2/2f/Stripe_Logo%2C_revised_2016.svg"
+  alt="Stripe"
+  className="h-4"
+/>
                   <span>{t("secureStripeCheckout")}</span>
                 </div>
               </div>
