@@ -2,11 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.5";
 import Stripe from "https://esm.sh/stripe@12.1.0";
 
+// Supabase admin client
 const supabase = createClient(
   Deno.env.get("PROJECT_URL")!,
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
 
+// Stripe client
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   apiVersion: "2022-11-15",
 });
@@ -21,8 +23,8 @@ const CORS_HEADERS = {
 
 const isValidUrl = (url: string) => {
   try {
-    const u = new URL(url);
-    return u.hostname === "app.cvitae.nl";
+    const parsed = new URL(url);
+    return parsed.hostname === "app.cvitae.nl";
   } catch {
     return false;
   }
@@ -66,15 +68,14 @@ serve(async (req) => {
       });
     }
 
-    // Use provided redirect URLs or fallback to defaults
     const safeSuccessUrl = isValidUrl(success_url)
       ? success_url
       : "https://app.cvitae.nl/?fromStripe=true";
+
     const safeCancelUrl = isValidUrl(cancel_url)
       ? cancel_url
       : "https://app.cvitae.nl/";
 
-    // Get or create stripe_customer_id from Supabase
     const { data: profile } = await supabase
       .from("profiles")
       .select("stripe_customer_id")
@@ -85,8 +86,9 @@ serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      customer_email: user.email,
-      customer: stripeCustomerId,
+      ...(stripeCustomerId
+        ? { customer: stripeCustomerId }
+        : { customer_email: user.email }),
       client_reference_id: user.id,
       success_url: safeSuccessUrl,
       cancel_url: safeCancelUrl,
