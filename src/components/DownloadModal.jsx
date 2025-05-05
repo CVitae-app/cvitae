@@ -306,31 +306,64 @@ function DownloadModal({
   };
 
   const handleSubscribe = async () => {
+    console.log("🟡 handleSubscribe called");
+  
     try {
       setLoading(true);
-      console.log("▶️ Creating Stripe checkout session...");
+      setInlineError("");
+      localStorage.setItem("modalStep", "subscribe");
   
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-      console.log("🪪 Got access token:", token?.slice(0, 10));
+      const sessionResponse = await supabase.auth.getSession();
+      const token = sessionResponse.data.session?.access_token;
   
-      const res = await fetch("https://aftjpjxbcmzswhxitozl.functions.supabase.co/create-checkout", {
+      if (!token) {
+        console.error("❌ No Supabase token available");
+        setInlineError("You're not logged in.");
+        return;
+      }
+  
+      console.log("🔐 Using Supabase token:", token.slice(0, 10) + "...");
+  
+      const payload = {
+        price_id: selectedPlanData.priceId,
+        success_url: `${window.location.origin}/?fromStripe=true`,
+        cancel_url: `${window.location.origin}/`,
+      };
+  
+      console.log("📦 Sending payload to Edge Function:", payload);
+  
+      const response = await fetch("https://aftjpjxbcmzswhxitozl.supabase.co/functions/v1/create-checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          price_id: selectedPlanData.priceId,
-          success_url: `${window.location.origin}/?fromStripe=true`,
-          cancel_url: `${window.location.origin}/`,
-        }),
+        body: JSON.stringify(payload),
       });
   
-      const data = await res.json();
-      console.log("🎟️ Stripe response:", data);
+      console.log("📡 Received response:", response);
+  
+      if (!response.ok) {
+        const raw = await response.text();
+        console.error("❌ Non-OK response from Edge Function:", response.status, raw);
+        setInlineError("Subscription failed. Please try again.");
+        return;
+      }
+  
+      let data;
+      try {
+        data = await response.json();
+      } catch (parseErr) {
+        const raw = await response.text();
+        console.error("❌ Failed to parse JSON response:", parseErr, raw);
+        setInlineError("Invalid response from server.");
+        return;
+      }
+  
+      console.log("✅ Parsed JSON response:", data);
   
       if (data?.url) {
+        console.log("✅ Redirecting to Stripe checkout:", data.url);
         window.dataLayer?.push({
           event: "subscribe_click",
           plan_id: selectedPlanData.id,
@@ -338,15 +371,16 @@ function DownloadModal({
         });
         window.location.href = data.url;
       } else {
-        setInlineError("Stripe session creation failed.");
+        console.error("❌ No `url` in response:", data);
+        setInlineError("Could not create Stripe session.");
       }
     } catch (err) {
-      console.error("❌ handleSubscribe error:", err);
-      setInlineError("Something went wrong.");
+      console.error("🔥 handleSubscribe exception:", err);
+      setInlineError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
-  };  
+  };   
 
   const handleDownload = async () => {
     setLoading(true);
