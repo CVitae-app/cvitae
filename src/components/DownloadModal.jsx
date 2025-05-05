@@ -311,15 +311,22 @@ function DownloadModal({
       setLoading(true);
       localStorage.setItem("modalStep", "subscribe");
   
-      const session = await supabase.auth.getSession();
-      console.log("📦 Session result:", session);
+      let session;
+      try {
+        session = await supabase.auth.getSession();
+        console.log("📦 session fetched:", session);
+      } catch (err) {
+        console.error("❌ Failed to get session:", err);
+        setInlineError("Failed to fetch session.");
+        return;
+      }
   
-      const token = session.data.session?.access_token;
-      console.log("🔐 Token:", token);
+      const token = session?.data?.session?.access_token;
+      console.log("🔐 token:", token);
   
       if (!token) {
-        setInlineError("Not authenticated. Please log in again.");
-        console.error("❌ No token found.");
+        setInlineError("Not logged in.");
+        console.error("❌ No access token found.");
         return;
       }
   
@@ -329,7 +336,7 @@ function DownloadModal({
         cancel_url: `${window.location.origin}/`,
       };
   
-      console.log("📤 Sending fetch to Stripe endpoint with body:", body);
+      console.log("📤 Sending fetch to Supabase Edge Function with:", body);
   
       const res = await fetch("https://aftjpjxbcmzswhxitozl.supabase.co/functions/v1/create-checkout", {
         method: "POST",
@@ -340,7 +347,7 @@ function DownloadModal({
         body: JSON.stringify(body),
       });
   
-      console.log("📬 Response from Stripe endpoint:", res);
+      console.log("📬 Response:", res);
       const data = await res.json();
       console.log("📨 Response JSON:", data);
   
@@ -348,15 +355,15 @@ function DownloadModal({
         console.log("✅ Redirecting to Stripe:", data.url);
         window.location.href = data.url;
       } else {
-        setInlineError("❌ Could not create Stripe checkout session.");
+        setInlineError("Could not create Stripe checkout session.");
       }
     } catch (err) {
-      console.error("❌ Error in handleSubscribe:", err);
+      console.error("❌ handleSubscribe error:", err);
       setInlineError("Something went wrong.");
     } finally {
       setLoading(false);
     }
-  };     
+  };  
 
   const handleDownload = async () => {
     setLoading(true);
