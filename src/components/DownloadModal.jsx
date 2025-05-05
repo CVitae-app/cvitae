@@ -314,7 +314,7 @@ function DownloadModal({
       const token = session.data.session?.access_token;
       console.log("🪪 Got access token:", token?.slice(0, 10));
   
-      const res = await fetch("https://cvitae-edge.supabase.co/functions/v1/create-checkout", {
+      const res = await fetch("https://aftjpjxbcmzswhxitozl.supabase.co/functions/v1/create-checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
