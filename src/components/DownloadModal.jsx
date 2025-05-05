@@ -507,9 +507,9 @@ function DownloadModal({
                 </button>
                 <div className="flex items-center justify-center mt-3 gap-2 text-xs text-gray-400">
                 <img
-  src="https://upload.wikimedia.org/wikipedia/commons/2/2f/Stripe_Logo%2C_revised_2016.svg"
+  src="https://stripe.com/img/v3/home/social.png"
   alt="Stripe"
-  className="h-4"
+  className="h-4 rounded"
 />
                   <span>{t("secureStripeCheckout")}</span>
                 </div>
