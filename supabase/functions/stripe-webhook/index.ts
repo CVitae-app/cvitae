@@ -2,29 +2,22 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.5";
 import Stripe from "https://esm.sh/stripe@12.1.0";
 
-console.log("🌍 Loaded env:");
-console.log("PROJECT_URL:", Deno.env.get("PROJECT_URL"));
-console.log("SERVICE_ROLE_KEY length:", Deno.env.get("SERVICE_ROLE_KEY")?.length);
-
-// Supabase Admin client
+// Supabase + Stripe setup
 const supabase = createClient(
   Deno.env.get("PROJECT_URL")!,
   Deno.env.get("SERVICE_ROLE_KEY")!
 );
-
-// Stripe client
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   apiVersion: "2022-11-15",
 });
-
 const endpointSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 
 // Map Stripe price IDs to internal plan IDs
 const planMap: Record<string, string> = {
-  "price_1Month": "1month",
-  "price_3Months": "3months",
-  "price_6Months": "6months",
-  "price_1Year": "1year",
+  "price_1RFc3fRpTB9d9YyvRz2fYeGM": "1month",
+  "price_1RFcEJRpTB9d9YyvOYdhdKEn": "3months",
+  "price_1RFcEhRpTB9d9Yyvv0ydhDW4": "6months",
+  "price_1RFcF3RpTB9d9Yyvi2ILDgHI": "1year",
 };
 
 serve(async (req) => {
@@ -35,41 +28,33 @@ serve(async (req) => {
     const body = await req.text();
     const encoder = new TextEncoder();
     const bodyBuffer = encoder.encode(body);
-
-    event = await stripe.webhooks.constructEventAsync(
-      bodyBuffer,
-      sig!,
-      endpointSecret
-    );
+    event = await stripe.webhooks.constructEventAsync(bodyBuffer, sig!, endpointSecret);
   } catch (err) {
     console.error("❌ Webhook verification failed:", err.message);
     return new Response("Webhook Error", { status: 400 });
   }
 
   const obj = event.data.object;
-  let customerId: string | null = null;
 
-  // ✅ On initial checkout
+  // ✅ 1. Checkout completed
   if (event.type === "checkout.session.completed") {
-    customerId = obj.customer as string;
-    const email = obj.customer_email ?? obj.customer_details?.email;
+    const metadata = obj.metadata || {};
+    const userId = metadata.user_id;
+    const customerId = obj.customer;
 
-    if (!email || !customerId) {
-      console.error("❌ Missing customer_email or customer ID in event");
-      return new Response("Missing customer info", { status: 400 });
+    if (!userId || !customerId) {
+      console.error("❌ Missing user_id or customer ID in metadata");
+      return new Response("Missing metadata", { status: 400 });
     }
-
-    console.log("📩 Found email:", email);
-    console.log("👤 Customer ID:", customerId);
 
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("id")
-      .eq("email", email)
+      .eq("id", userId)
       .single();
 
     if (!profile || error) {
-      console.error("❌ No user found for email:", email);
+      console.error("❌ No user found for ID:", userId);
       return new Response("User not found", { status: 404 });
     }
 
@@ -79,24 +64,24 @@ serve(async (req) => {
         is_subscribed: true,
         stripe_customer_id: customerId,
       })
-      .eq("id", profile.id);
+      .eq("id", userId);
 
     if (updateError) {
       console.error("❌ Failed to update profile:", updateError.message);
       return new Response("Update failed", { status: 500 });
     }
 
-    console.log("✅ Subscribed user (checkout.session.completed):", email);
+    console.log("✅ Subscribed user (checkout.session.completed):", userId);
     return new Response("OK", { status: 200 });
   }
 
-  // ✅ On subscription create/update/delete
+  // ✅ 2. Subscription create/update/delete
   if (
     event.type === "customer.subscription.created" ||
     event.type === "customer.subscription.updated" ||
     event.type === "customer.subscription.deleted"
   ) {
-    customerId = obj.customer as string;
+    const customerId = obj.customer as string;
     const status = obj.status;
 
     const { data: profile, error } = await supabase
@@ -111,7 +96,6 @@ serve(async (req) => {
     }
 
     const isSubscribed = status === "active" || status === "trialing";
-
     const subscriptionId = obj.id;
     const price = obj.items?.data?.[0]?.price;
     const priceId = price?.id ?? null;
@@ -157,9 +141,9 @@ serve(async (req) => {
     return new Response("OK", { status: 200 });
   }
 
-  // ✅ On payment success
+  // ✅ 3. Payment succeeded
   if (event.type === "invoice.payment_succeeded") {
-    customerId = obj.customer as string;
+    const customerId = obj.customer as string;
 
     const { data: profile, error } = await supabase
       .from("profiles")
@@ -181,9 +165,9 @@ serve(async (req) => {
     return new Response("OK", { status: 200 });
   }
 
-  // ✅ On payment failure
+  // ✅ 4. Payment failed
   if (event.type === "invoice.payment_failed") {
-    customerId = obj.customer as string;
+    const customerId = obj.customer as string;
 
     const { data: profile, error } = await supabase
       .from("profiles")

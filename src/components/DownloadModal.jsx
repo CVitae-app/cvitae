@@ -11,26 +11,26 @@ const plans = [
     id: "1month",
     labelKey: "plan1MonthLabel",
     descriptionKey: "plan1MonthDesc",
-    checkoutUrl: "https://buy.stripe.com/test_fZe2blcAx5BNa8UfYY",
+    priceId: "price_1RFc3fRpTB9d9YyvRz2fYeGM",
   },
   {
     id: "3months",
     labelKey: "plan3MonthsLabel",
     descriptionKey: "plan3MonthsDesc",
-    checkoutUrl: "https://buy.stripe.com/test_5kA7vFfMJ4xJepa4gh",
+    priceId: "price_1RFcEJRpTB9d9YyvOYdhdKEn",
     popular: true,
   },
   {
     id: "6months",
     labelKey: "plan6MonthsLabel",
     descriptionKey: "plan6MonthsDesc",
-    checkoutUrl: "https://buy.stripe.com/test_14k6rB2ZXggr94Q3ce",
+    priceId: "price_1RFcEhRpTB9d9Yyvv0ydhDW4",
   },
   {
     id: "1year",
     labelKey: "plan1YearLabel",
     descriptionKey: "plan1YearDesc",
-    checkoutUrl: "https://buy.stripe.com/test_fZe7vF0RP6FR5SEcMP",
+    priceId: "price_1RFcF3RpTB9d9Yyvi2ILDgHI",
   },
 ];
 
@@ -94,10 +94,10 @@ function DownloadModal({
 
   useEffect(() => {
     if (!isOpen || !isHydrated) return;
-  
+
     const url = new URL(window.location.href);
     const fromStripe = url.searchParams.get("fromStripe");
-  
+
     const init = async () => {
       let session = null;
       for (let i = 0; i < 10; i++) {
@@ -108,26 +108,26 @@ function DownloadModal({
         }
         await new Promise((r) => setTimeout(r, 250));
       }
-  
+
       if (session?.user?.email) {
         setEmail(session.user.email);
         localStorage.setItem("lastEmail", session.user.email);
       }
-  
+
       if (fromProfileMenu) return setStep("login");
       if (startAtSubscribe || fromStripe) {
         window.dataLayer?.push({
           event: "returned_from_stripe",
           user_id: session?.user?.id || "anonymous",
         });
-        return setStep("subscribe");
+        return setStepSmart(); // auto-switch to "download" if now subscribed
       }
-  
+
       await setStepSmart();
     };
-  
+
     init();
-  }, [isOpen, isHydrated, fromProfileMenu, startAtSubscribe, setStepSmart]);  
+  }, [isOpen, isHydrated, fromProfileMenu, startAtSubscribe, setStepSmart]);
 
   useEffect(() => {
     const handler = (e) => {
@@ -144,13 +144,12 @@ function DownloadModal({
 
   useEffect(() => {
     if (!isOpen || !isHydrated) return;
-  
-    // Only reset to login if user is not authenticated
+
     if (!user) {
       setStep("login");
       setEmailMode("signup");
     }
-  
+
     setEmail(localStorage.getItem("lastEmail") || "");
     setPassword("");
     setErrors({});
@@ -160,7 +159,7 @@ function DownloadModal({
     setGoogleLoading(false);
     setLoginAttempts(0);
     setShowPassword(false);
-  }, [isOpen, user, isHydrated]);  
+  }, [isOpen, user, isHydrated]);
 
   const validate = useCallback(() => {
     const newErrors = {};
@@ -176,26 +175,26 @@ function DownloadModal({
 
   const handleEmailAuth = async () => {
     if (loading || !validate()) return;
-  
+
     setLoading(true);
     setInlineError("");
     setSuccessMessage("");
-  
+
     if (loginAttempts >= 5) {
       setInlineError(t("tooManyAttempts"));
       setLoading(false);
       return;
     }
-  
+
     localStorage.setItem("lastEmail", email);
     const isSignup = emailMode === "signup";
     const language = navigator.language.startsWith("nl") ? "nl" : "en";
-  
+
     try {
       if (!isSignup) {
         await supabase.auth.signOut(); // ensure clean login
       }
-  
+
       const { error } = isSignup
         ? await supabase.auth.signUp({
             email,
@@ -203,15 +202,14 @@ function DownloadModal({
             options: { data: { language } },
           })
         : await supabase.auth.signInWithPassword({ email, password });
-  
+
       if (error) {
         setLoginAttempts((prev) => prev + 1);
         setInlineError(error.message);
         setLoading(false);
         return;
       }
-  
-      // ✅ Use fresh user from Supabase
+
       let currentUser = null;
       for (let i = 0; i < 10; i++) {
         const { data } = await supabase.auth.getUser();
@@ -221,14 +219,14 @@ function DownloadModal({
         }
         await new Promise((r) => setTimeout(r, 250));
       }
-  
+
       if (currentUser) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("id")
           .eq("id", currentUser.id)
           .maybeSingle();
-  
+
         if (!profile) {
           await supabase.from("profiles").insert([
             {
@@ -239,14 +237,14 @@ function DownloadModal({
             },
           ]);
         }
-  
+
         window.dataLayer?.push({
           event: isSignup ? "auth_email_signup" : "auth_email_login",
           email,
         });
-  
-        await supabase.auth.refreshSession(); // force refresh
-        await setStepSmart(); // move to next step
+
+        await supabase.auth.refreshSession();
+        await setStepSmart();
       } else {
         setInlineError("Login failed — please try again.");
       }
@@ -255,7 +253,7 @@ function DownloadModal({
     } finally {
       setLoading(false);
     }
-  };  
+  };
 
   const handleGoogleLogin = async () => {
     try {
@@ -307,16 +305,45 @@ function DownloadModal({
     }
   };
 
-  const handleSubscribe = () => {
-    setLoading(false);
-    localStorage.setItem("modalStep", "subscribe");
-    window.dataLayer?.push({
-      event: "subscribe_click",
-      plan_id: selectedPlanData.id,
-      plan_label: t(selectedPlanData.labelKey),
-    });
-    window.location.href = selectedPlanData.checkoutUrl;
-  };  
+  const handleSubscribe = async () => {
+    try {
+      setLoading(true);
+      localStorage.setItem("modalStep", "subscribe");
+
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const res = await fetch("https://<your-project-ref>.functions.supabase.co/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          price_id: selectedPlanData.priceId,
+          success_url: `${window.location.origin}/?fromStripe=true`,
+          cancel_url: `${window.location.origin}/`,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data?.url) {
+        window.dataLayer?.push({
+          event: "subscribe_click",
+          plan_id: selectedPlanData.id,
+          plan_label: t(selectedPlanData.labelKey),
+        });
+        window.location.href = data.url;
+      } else {
+        setInlineError("Could not create checkout session.");
+      }
+    } catch {
+      setInlineError("Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleDownload = async () => {
     setLoading(true);
@@ -506,11 +533,11 @@ function DownloadModal({
                   {loading ? t("loading") + "..." : t("try3DaysFor", { price: "€1,95" })}
                 </button>
                 <div className="flex items-center justify-center mt-3 gap-2 text-xs text-gray-400">
-                <img
-  src="https://stripe.com/img/v3/home/social.png"
-  alt="Stripe"
-  className="h-4 rounded"
-/>
+                  <img
+                    src="https://stripe.com/img/v3/home/social.png"
+                    alt="Stripe"
+                    className="h-4 rounded"
+                  />
                   <span>{t("secureStripeCheckout")}</span>
                 </div>
               </div>
