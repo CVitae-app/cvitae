@@ -312,15 +312,24 @@ function DownloadModal({
       localStorage.setItem("modalStep", "subscribe");
   
       const session = await supabase.auth.getSession();
+      console.log("📦 Session result:", session);
+  
       const token = session.data.session?.access_token;
-      console.log("🔐 Supabase token:", token);
+      console.log("🔐 Token:", token);
+  
+      if (!token) {
+        setInlineError("Not authenticated. Please log in again.");
+        console.error("❌ No token found.");
+        return;
+      }
   
       const body = {
         price_id: selectedPlanData.priceId,
         success_url: `${window.location.origin}/?fromStripe=true`,
         cancel_url: `${window.location.origin}/`,
       };
-      console.log("📦 Payload being sent to Edge Function:", body);
+  
+      console.log("📤 Sending fetch to Stripe endpoint with body:", body);
   
       const res = await fetch("https://aftjpjxbcmzswhxitozl.supabase.co/functions/v1/create-checkout", {
         method: "POST",
@@ -331,25 +340,19 @@ function DownloadModal({
         body: JSON.stringify(body),
       });
   
-      console.log("📬 Response status:", res.status);
+      console.log("📬 Response from Stripe endpoint:", res);
       const data = await res.json();
-      console.log("📨 Response body:", data);
+      console.log("📨 Response JSON:", data);
   
       if (data?.url) {
         console.log("✅ Redirecting to Stripe:", data.url);
-        window.dataLayer?.push({
-          event: "subscribe_click",
-          plan_id: selectedPlanData.id,
-          plan_label: t(selectedPlanData.labelKey),
-        });
         window.location.href = data.url;
       } else {
         setInlineError("❌ Could not create Stripe checkout session.");
-        console.error("❌ Unexpected response from Stripe endpoint:", data);
       }
-    } catch (error) {
+    } catch (err) {
+      console.error("❌ Error in handleSubscribe:", err);
       setInlineError("Something went wrong.");
-      console.error("❌ handleSubscribe error:", error);
     } finally {
       setLoading(false);
     }
