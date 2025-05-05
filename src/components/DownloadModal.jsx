@@ -308,12 +308,13 @@ function DownloadModal({
   const handleSubscribe = async () => {
     try {
       setLoading(true);
-      localStorage.setItem("modalStep", "subscribe");
-
+      console.log("▶️ Creating Stripe checkout session...");
+  
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
-
-      const res = await fetch("https://<your-project-ref>.functions.supabase.co/create-checkout", {
+      console.log("🪪 Got access token:", token?.slice(0, 10));
+  
+      const res = await fetch("https://cvitae-edge.supabase.co/functions/v1/create-checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -325,9 +326,10 @@ function DownloadModal({
           cancel_url: `${window.location.origin}/`,
         }),
       });
-
+  
       const data = await res.json();
-
+      console.log("🎟️ Stripe response:", data);
+  
       if (data?.url) {
         window.dataLayer?.push({
           event: "subscribe_click",
@@ -336,14 +338,15 @@ function DownloadModal({
         });
         window.location.href = data.url;
       } else {
-        setInlineError("Could not create checkout session.");
+        setInlineError("Stripe session creation failed.");
       }
-    } catch {
+    } catch (err) {
+      console.error("❌ handleSubscribe error:", err);
       setInlineError("Something went wrong.");
     } finally {
       setLoading(false);
     }
-  };
+  };  
 
   const handleDownload = async () => {
     setLoading(true);
