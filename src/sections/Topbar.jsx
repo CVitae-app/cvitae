@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "../contexts/LanguageContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-
 import {
   ArrowDownTrayIcon,
   GlobeAltIcon,
@@ -10,6 +9,7 @@ import {
   HomeIcon,
   PencilIcon,
   UserCircleIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 function TopBar({
@@ -22,7 +22,7 @@ function TopBar({
   hideDashboard = false,
 }) {
   const { t, language, setLanguage } = useTranslation();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -48,19 +48,8 @@ function TopBar({
       setCvName?.(finalName);
       setInputValue(finalName);
       localStorage.setItem("cvName", finalName);
-
-      if (user && !hideDownload) {
-        const id = localStorage.getItem("currentCVId");
-        if (id) {
-          const { error } = await supabase
-            .from("cvs")
-            .update({ name: finalName })
-            .eq("id", id);
-          if (error) console.error("❌ Failed to update CV name:", error.message);
-        }
-      }
     },
-    [user, getDynamicName, setCvName, hideDownload]
+    [getDynamicName, setCvName]
   );
 
   const toggleLanguage = useCallback(() => {
@@ -80,7 +69,6 @@ function TopBar({
 
   const handleBackClick = () => {
     const path = location.pathname;
-
     if (path === "/" || /^\/cv\/[^/]+$/.test(path)) {
       navigate("/dashboard");
     } else if (path === "/dashboard") {
@@ -185,6 +173,17 @@ function TopBar({
             title={t("profile")}
           >
             <UserCircleIcon className="w-6 h-6 text-gray-600" />
+          </button>
+        )}
+
+        {/* Logout Button (Only if logged in) */}
+        {user && (
+          <button
+            onClick={logout}
+            className="p-2 rounded-full hover:bg-red-100 transition"
+            title="Logout"
+          >
+            <XMarkIcon className="w-5 h-5 text-red-500" />
           </button>
         )}
       </div>
