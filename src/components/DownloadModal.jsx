@@ -55,6 +55,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
   const selectedPlanData = useMemo(() => plans.find((p) => p.id === selectedPlan), [selectedPlan]);
 
   const setStepSmart = useCallback(async () => {
+    if (!isHydrated) return;
     if (!user) {
       setStep("login");
       return;
@@ -66,7 +67,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
         .select("is_subscribed")
         .eq("id", user.id)
         .maybeSingle();
-        
+      
       const isSubscribed = profile?.is_subscribed === true;
       setStep(isSubscribed ? "download" : "subscribe");
     } catch (error) {
@@ -74,7 +75,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       setInlineError(t("errorFetchingProfile"));
       setStep("subscribe");
     }
-  }, [user, t]);
+  }, [user, t, isHydrated]);
 
   useEffect(() => {
     if (isOpen) {
@@ -88,8 +89,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
 
       const url = new URL(window.location.href);
       if (url.searchParams.get("fromStripe") === "true") {
-        refreshSession();
-        setStepSmart();
+        refreshSession().then(setStepSmart);
         url.searchParams.delete("fromStripe");
         window.history.replaceState(null, "", url.pathname);
       } else if (startAtSubscribe) {
@@ -138,13 +138,14 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
 
       if (error) throw new Error(error.message);
       if (isSignup) setSuccessMessage(t("signupSuccess"));
+      await refreshSession();
       await setStepSmart();
     } catch (err) {
       setInlineError(err.message || t("loginError"));
     } finally {
       setLoading(false);
     }
-  }, [email, password, emailMode, validate, setStepSmart, loading, t]);
+  }, [email, password, emailMode, validate, setStepSmart, loading, t, refreshSession]);
 
   const handleGoogleLogin = useCallback(async () => {
     setGoogleLoading(true);
@@ -298,24 +299,6 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
         </span>
         <span onClick={() => setEmailMode("reset")}>{t("forgotPassword")}</span>
       </div>
-
-      <div className="relative py-3">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-gray-300"></div>
-        </div>
-        <div className="relative text-center text-xs text-gray-500 bg-white w-fit mx-auto px-2">
-          {t("orContinueWith")}
-        </div>
-      </div>
-
-      <button
-        onClick={handleGoogleLogin}
-        disabled={googleLoading}
-        className="w-full border border-gray-300 py-2 rounded-md flex items-center justify-center gap-2 mt-3"
-      >
-        <img src="https://authjs.dev/img/providers/google.svg" alt="Google" className="w-4 h-4" />
-        {googleLoading ? t("loading") + "..." : t("continueWithGoogle")}
-      </button>
     </div>
   );
 

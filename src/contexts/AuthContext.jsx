@@ -19,8 +19,6 @@ export const AuthProvider = ({ children }) => {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-
     const initializeAuth = async () => {
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -28,22 +26,21 @@ export const AuthProvider = ({ children }) => {
 
         if (currentUser) {
           const enrichedUser = await fetchUserProfile(currentUser);
-          if (isMounted) {
-            setUser(enrichedUser);
-            localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
-          }
-        } else if (isMounted) {
+          setUser(enrichedUser);
+          localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
+          console.log("✅ Auth Initialized - User Loaded:", enrichedUser);
+        } else {
           setUser(null);
           localStorage.removeItem("auth_user");
+          console.warn("❌ No active session - User logged out");
         }
       } catch (error) {
         console.error("❌ Error initializing auth:", error);
-        if (isMounted) setUser(null);
+        setUser(null);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-          setIsHydrated(true);
-        }
+        setLoading(false);
+        setIsHydrated(true);
+        console.log("✅ Auth Initialized - Is Hydrated:", true);
       }
     };
 
@@ -51,34 +48,23 @@ export const AuthProvider = ({ children }) => {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setLoading(true);
-        try {
-          const newUser = session?.user || null;
-
-          if (event === "SIGNED_UP" && newUser) {
-            await handleNewUserSignup(newUser);
-          }
-
-          if (newUser) {
-            const enrichedUser = await fetchUserProfile(newUser);
-            setUser(enrichedUser);
-            localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
-          } else {
-            setUser(null);
-            localStorage.removeItem("auth_user");
-          }
-        } catch (error) {
-          console.error("❌ Error in auth state change:", error);
+        console.log("✅ Auth State Changed - Event:", event);
+        if (session?.user) {
+          const enrichedUser = await fetchUserProfile(session.user);
+          setUser(enrichedUser);
+          localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
+          console.log("✅ Auth State Changed - User:", enrichedUser);
+        } else {
           setUser(null);
-        } finally {
-          setLoading(false);
-          setIsHydrated(true);
+          localStorage.removeItem("auth_user");
+          console.warn("❌ Auth State Changed - User logged out");
         }
+        setIsHydrated(true);
+        console.log("✅ Auth State Change Completed - Is Hydrated:", true);
       }
     );
 
     return () => {
-      isMounted = false;
       listener?.subscription?.unsubscribe?.();
     };
   }, []);
@@ -88,7 +74,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("language, first_name")
+        .select("language, first_name, is_subscribed")
         .eq("id", currentUser.id)
         .single();
 
@@ -100,6 +86,7 @@ export const AuthProvider = ({ children }) => {
         ...currentUser,
         language: profile?.language || "en",
         firstName: profile?.first_name || "there",
+        isSubscribed: profile?.is_subscribed || false,
       };
     } catch (err) {
       console.error("❌ Error enriching user:", err);
@@ -113,7 +100,6 @@ export const AuthProvider = ({ children }) => {
       const language = navigator.language.startsWith("nl") ? "nl" : "en";
       const firstName = newUser.user_metadata?.firstName || "there";
 
-      // ✅ Save new user profile
       await supabase.from("profiles").upsert({
         id: newUser.id,
         email: newUser.email,
@@ -121,21 +107,7 @@ export const AuthProvider = ({ children }) => {
         first_name: firstName,
       });
 
-      // ✅ Send welcome email
-      const trialStart = dayjs().locale(language).format("D MMMM YYYY");
-      const trialEnd = dayjs().add(3, "day").locale(language).format("D MMMM YYYY");
-
-      await sendEmail(newUser.email, language, "welcome", {
-        name: firstName,
-        trial_length: "3",
-        trial_start_date: trialStart,
-        trial_end_date: trialEnd,
-        action_url: "https://app.cvitae.nl/dashboard",
-        support_url: "https://cvitae.nl/help",
-        year: String(new Date().getFullYear()),
-      });
-
-      console.log("✅ Welcome email sent to:", newUser.email);
+      console.log("✅ User Profile Created for:", newUser.email);
     } catch (error) {
       console.error("❌ Error during signup process:", error);
     }
@@ -147,25 +119,28 @@ export const AuthProvider = ({ children }) => {
       await supabase.auth.signOut();
       setUser(null);
       localStorage.removeItem("auth_user");
+      console.log("✅ User logged out");
     } catch (error) {
       console.error("❌ Error during logout:", error);
     }
   }, []);
 
-  // ✅ Automatically refresh session if user is logged in
+  // ✅ Refresh session and re-fetch user data
   const refreshSession = useCallback(async () => {
     try {
-      const { data: sessionData, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error("❌ Error refreshing session:", error);
-        return;
-      }
-
+      console.log("✅ Refreshing session...");
+      const { data: sessionData } = await supabase.auth.getSession();
       const currentUser = sessionData?.session?.user || null;
+
       if (currentUser) {
         const enrichedUser = await fetchUserProfile(currentUser);
         setUser(enrichedUser);
         localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
+        console.log("✅ Session refreshed - User:", enrichedUser);
+      } else {
+        setUser(null);
+        localStorage.removeItem("auth_user");
+        console.warn("❌ Session refresh - No active session");
       }
     } catch (error) {
       console.error("❌ Error during session refresh:", error);
@@ -178,6 +153,11 @@ export const AuthProvider = ({ children }) => {
     () => ({ user, logout, loading, isHydrated, refreshSession }),
     [user, logout, loading, isHydrated, refreshSession]
   );
+
+  useEffect(() => {
+    console.log("✅ AuthContext - User state changed:", user);
+    console.log("✅ AuthContext - Is Hydrated:", isHydrated);
+  }, [user, isHydrated]);
 
   return (
     <AuthContext.Provider value={authContextValue}>
