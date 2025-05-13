@@ -42,7 +42,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
 
   const [step, setStep] = useState("login");
   const [emailMode, setEmailMode] = useState("signup");
-  const [email, setEmail] = useState(() => localStorage.getItem("lastEmail") || "");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState("1month");
@@ -78,14 +78,14 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
 
   useEffect(() => {
     if (isOpen) {
-      setEmail(localStorage.getItem("lastEmail") || "");
+      setEmail("");
       setPassword("");
       setErrors({});
       setInlineError("");
       setSuccessMessage("");
       setLoading(false);
       setGoogleLoading(false);
-      
+
       const url = new URL(window.location.href);
       if (url.searchParams.get("fromStripe") === "true") {
         refreshSession();
@@ -123,156 +123,66 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
     return Object.keys(newErrors).length === 0;
   }, [email, password, emailMode, t]);
 
-    // ✅ Email Authentication (Signup/Login)
-    const handleEmailAuth = useCallback(async () => {
-      if (loading || !validate()) return;
-      setLoading(true);
-      setInlineError("");
-      setSuccessMessage("");
-  
-      try {
-        const isSignup = emailMode === "signup";
-        localStorage.setItem("lastEmail", email);
-        const language = navigator.language.startsWith("nl") ? "nl" : "en";
-  
-        const { error } = isSignup
-          ? await supabase.auth.signUp({
-              email,
-              password,
-              options: { data: { language } },
-            })
-          : await supabase.auth.signInWithPassword({ email, password });
-  
-        if (error) throw new Error(error.message);
-        if (isSignup) setSuccessMessage(t("signupSuccess"));
-  
-        // Wait for session to initialize
-        for (let i = 0; i < 10; i++) {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData.session) {
-            await setStepSmart();
-            return;
-          }
-          await new Promise((r) => setTimeout(r, 250));
-        }
-  
-        setInlineError(t("loginFailed"));
-      } catch (err) {
-        setInlineError(err.message || t("loginError"));
-      } finally {
-        setLoading(false);
-      }
-    }, [email, password, emailMode, validate, setStepSmart, loading, t]);
-  
-    // ✅ Google OAuth Login
-    const handleGoogleLogin = useCallback(async () => {
-      setGoogleLoading(true);
-      setInlineError("");
-  
-      try {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: "google",
-          options: { redirectTo: window.location.origin },
-        });
-        if (error) throw new Error(error.message);
-      } catch (err) {
-        setInlineError(err.message || t("loginError"));
-      } finally {
-        setGoogleLoading(false);
-      }
-    }, [t]);
-  
-    // ✅ Password Reset Function
-    const handleResetPassword = useCallback(async () => {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        setErrors({ email: t("invalidEmail") });
-        return;
-      }
-  
-      setLoading(true);
-      try {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
-        if (error) throw new Error(error.message);
-        setSuccessMessage(t("resetEmailSent"));
-      } catch (err) {
-        setInlineError(err.message || t("resetError"));
-      } finally {
-        setLoading(false);
-      }
-    }, [email, t]);
-  
-    // ✅ JSX: Login Form UI
-    const renderLoginForm = () => (
-      <div>
-        <h3 className="text-xl font-semibold text-center mb-4">{t("login")}</h3>
-        <form onSubmit={(e) => { e.preventDefault(); emailMode === "reset" ? handleResetPassword() : handleEmailAuth(); }}>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder={t("emailPlaceholder")}
-            className="w-full border px-3 py-2 rounded-md text-sm mb-3"
-          />
-          {emailMode !== "reset" && (
-            <div className="relative mb-3">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t("passwordPlaceholder")}
-                className="w-full border px-3 py-2 rounded-md text-sm pr-10"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((prev) => !prev)}
-                className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
-              >
-                {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
-              </button>
-            </div>
-          )}
-          {successMessage && <p className="text-xs text-green-600 text-center">{successMessage}</p>}
-          {inlineError && <p className="text-xs text-red-500 text-center">{inlineError}</p>}
-  
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition"
-          >
-            {loading ? t("loading") + "..." : emailMode === "reset" ? t("sendResetLink") : t(emailMode)}
-          </button>
-        </form>
-  
-        <div className="flex justify-between text-xs text-blue-600 mt-2 underline cursor-pointer">
-          <span onClick={() => setEmailMode(emailMode === "signup" ? "login" : "signup")}>
-            {emailMode === "signup" ? t("alreadyHaveAccount") : t("createAccount")}
-          </span>
-          <span onClick={() => setEmailMode("reset")}>{t("forgotPassword")}</span>
-        </div>
-  
-        <div className="relative py-3">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300"></div>
-          </div>
-          <div className="relative text-center text-xs text-gray-500 bg-white w-fit mx-auto px-2">
-            {t("orContinueWith")}
-          </div>
-        </div>
-  
-        <button
-          onClick={handleGoogleLogin}
-          disabled={googleLoading}
-          className="w-full border border-gray-300 py-2 rounded-md flex items-center justify-center gap-2 mt-3"
-        >
-          <img src="https://authjs.dev/img/providers/google.svg" alt="Google" className="w-4 h-4" />
-          {googleLoading ? t("loading") + "..." : t("continueWithGoogle")}
-        </button>
-      </div>
-    );
+  const handleEmailAuth = useCallback(async () => {
+    if (loading || !validate()) return;
+    setLoading(true);
+    setInlineError("");
+    setSuccessMessage("");
 
-      // ✅ Subscription with Stripe (Secure Checkout)
+    try {
+      const isSignup = emailMode === "signup";
+      const language = navigator.language.startsWith("nl") ? "nl" : "en";
+      const { error } = isSignup
+        ? await supabase.auth.signUp({ email, password, options: { data: { language } } })
+        : await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) throw new Error(error.message);
+      if (isSignup) setSuccessMessage(t("signupSuccess"));
+      await setStepSmart();
+    } catch (err) {
+      setInlineError(err.message || t("loginError"));
+    } finally {
+      setLoading(false);
+    }
+  }, [email, password, emailMode, validate, setStepSmart, loading, t]);
+
+  const handleGoogleLogin = useCallback(async () => {
+    setGoogleLoading(true);
+    setInlineError("");
+
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin },
+      });
+      if (error) throw new Error(error.message);
+    } catch (err) {
+      setInlineError(err.message || t("loginError"));
+    } finally {
+      setGoogleLoading(false);
+    }
+  }, [t]);
+
+  const handleResetPassword = useCallback(async () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrors({ email: t("invalidEmail") });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw new Error(error.message);
+      setSuccessMessage(t("resetEmailSent"));
+    } catch (err) {
+      setInlineError(err.message || t("resetError"));
+    } finally {
+      setLoading(false);
+    }
+  }, [email, t]);
+
   const handleSubscribe = useCallback(async () => {
     setLoading(true);
     setInlineError("");
@@ -316,7 +226,6 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
     }
   }, [selectedPlanData, t]);
 
-  // ✅ Download CV Function
   const handleDownload = useCallback(async () => {
     setLoading(true);
     try {
@@ -339,7 +248,77 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
     }
   }, [cvData, onDownload, onClose, user]);
 
-  // ✅ JSX: Subscription Step UI
+  const renderLoginForm = () => (
+    <div>
+      <h3 className="text-xl font-semibold text-center mb-4">{t("login")}</h3>
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        emailMode === "reset" ? handleResetPassword() : handleEmailAuth();
+      }}>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder={t("emailPlaceholder")}
+          className="w-full border px-3 py-2 rounded-md text-sm mb-3"
+        />
+        {emailMode !== "reset" && (
+          <div className="relative mb-3">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={t("passwordPlaceholder")}
+              className="w-full border px-3 py-2 rounded-md text-sm pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute inset-y-0 right-2 flex items-center text-gray-500 hover:text-gray-700"
+            >
+              {showPassword ? <EyeSlashIcon className="w-5 h-5" /> : <EyeIcon className="w-5 h-5" />}
+            </button>
+          </div>
+        )}
+        {successMessage && <p className="text-xs text-green-600 text-center">{successMessage}</p>}
+        {inlineError && <p className="text-xs text-red-500 text-center">{inlineError}</p>}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition"
+        >
+          {loading ? t("loading") + "..." : emailMode === "reset" ? t("sendResetLink") : t(emailMode)}
+        </button>
+      </form>
+
+      <div className="flex justify-between text-xs text-blue-600 mt-2 underline cursor-pointer">
+        <span onClick={() => setEmailMode(emailMode === "signup" ? "login" : "signup")}>
+          {emailMode === "signup" ? t("alreadyHaveAccount") : t("createAccount")}
+        </span>
+        <span onClick={() => setEmailMode("reset")}>{t("forgotPassword")}</span>
+      </div>
+
+      <div className="relative py-3">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-300"></div>
+        </div>
+        <div className="relative text-center text-xs text-gray-500 bg-white w-fit mx-auto px-2">
+          {t("orContinueWith")}
+        </div>
+      </div>
+
+      <button
+        onClick={handleGoogleLogin}
+        disabled={googleLoading}
+        className="w-full border border-gray-300 py-2 rounded-md flex items-center justify-center gap-2 mt-3"
+      >
+        <img src="https://authjs.dev/img/providers/google.svg" alt="Google" className="w-4 h-4" />
+        {googleLoading ? t("loading") + "..." : t("continueWithGoogle")}
+      </button>
+    </div>
+  );
+
   const renderSubscriptionStep = () => (
     <div>
       <h3 className="text-xl font-semibold text-center mb-4">{t("selectSubscriptionToProceed")}</h3>
@@ -373,7 +352,6 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
     </div>
   );
 
-  // ✅ JSX: Download Step UI
   const renderDownloadStep = () => (
     <div className="text-center space-y-4">
       <div className="text-4xl">✅</div>
