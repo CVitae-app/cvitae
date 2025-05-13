@@ -30,13 +30,13 @@ const plans = [
     id: "1year",
     labelKey: "plan1YearLabel",
     descriptionKey: "plan1YearDesc",
-    priceId: "price_1RFcF3RpTB9d9Yyvi2ILDgHI",
+    priceId: "price_1RFcF3RpTB9d9Yvi2ILDgHI",
   },
 ];
 
 function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe = false }) {
   const { t } = useTranslation();
-  const { user, isHydrated } = useAuth();
+  const { user, isHydrated, refreshSession } = useAuth();
   const modalRef = useRef();
   const previewRef = useRef();
 
@@ -55,7 +55,10 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
   const selectedPlanData = useMemo(() => plans.find((p) => p.id === selectedPlan), [selectedPlan]);
 
   const setStepSmart = useCallback(async () => {
-    if (!user) return setStep("login");
+    if (!user) {
+      setStep("login");
+      return;
+    }
 
     try {
       const { data: profile } = await supabase
@@ -63,34 +66,39 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
         .select("is_subscribed")
         .eq("id", user.id)
         .maybeSingle();
+        
       const isSubscribed = profile?.is_subscribed === true;
       setStep(isSubscribed ? "download" : "subscribe");
-    } catch {
+    } catch (error) {
+      console.error("❌ Error fetching profile:", error);
       setInlineError(t("errorFetchingProfile"));
       setStep("subscribe");
     }
   }, [user, t]);
 
   useEffect(() => {
-    if (isOpen && user && isHydrated) setStepSmart();
-  }, [isOpen, user, isHydrated, setStepSmart]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const initSession = async () => {
-      if (!user) {
-        setStep("login");
-        return;
-      }
-
+    if (isOpen) {
+      setEmail(localStorage.getItem("lastEmail") || "");
+      setPassword("");
+      setErrors({});
+      setInlineError("");
+      setSuccessMessage("");
+      setLoading(false);
+      setGoogleLoading(false);
+      
       const url = new URL(window.location.href);
-      const fromStripe = url.searchParams.get("fromStripe");
-      if (fromStripe) setStepSmart();
-      else if (startAtSubscribe) setStep("subscribe");
-      else setStepSmart();
-    };
-    initSession();
-  }, [isOpen, user, startAtSubscribe, setStepSmart]);
+      if (url.searchParams.get("fromStripe") === "true") {
+        refreshSession();
+        setStepSmart();
+        url.searchParams.delete("fromStripe");
+        window.history.replaceState(null, "", url.pathname);
+      } else if (startAtSubscribe) {
+        setStep("subscribe");
+      } else {
+        setStepSmart();
+      }
+    }
+  }, [isOpen, user, startAtSubscribe, setStepSmart, refreshSession]);
 
   useEffect(() => {
     const closeOnEscapeOrClickOutside = (e) => {
@@ -105,31 +113,18 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
     };
   }, [onClose]);
 
-  useEffect(() => {
-    if (isOpen) {
-      setEmail(localStorage.getItem("lastEmail") || "");
-      setPassword("");
-      setErrors({});
-      setInlineError("");
-      setSuccessMessage("");
-      setLoading(false);
-      setGoogleLoading(false);
+  const validate = useCallback(() => {
+    const newErrors = {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = t("invalidEmail");
+    if (emailMode !== "reset" && password.length < 8) {
+      newErrors.password = t("passwordCriteria");
     }
-  }, [isOpen]);
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [email, password, emailMode, t]);
 
-    // Validation Function
-    const validate = useCallback(() => {
-      const newErrors = {};
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = t("invalidEmail");
-      if (emailMode !== "reset" && password.length < 8) {
-        newErrors.password = t("passwordCriteria");
-      }
-      setErrors(newErrors);
-      return Object.keys(newErrors).length === 0;
-    }, [email, password, emailMode, t]);
-  
-    // Email Authentication (Signup/Login)
-    const handleEmailAuth = async () => {
+    // ✅ Email Authentication (Signup/Login)
+    const handleEmailAuth = useCallback(async () => {
       if (loading || !validate()) return;
       setLoading(true);
       setInlineError("");
@@ -141,12 +136,17 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
         const language = navigator.language.startsWith("nl") ? "nl" : "en";
   
         const { error } = isSignup
-          ? await supabase.auth.signUp({ email, password, options: { data: { language } } })
+          ? await supabase.auth.signUp({
+              email,
+              password,
+              options: { data: { language } },
+            })
           : await supabase.auth.signInWithPassword({ email, password });
   
         if (error) throw new Error(error.message);
         if (isSignup) setSuccessMessage(t("signupSuccess"));
   
+        // Wait for session to initialize
         for (let i = 0; i < 10; i++) {
           const { data: sessionData } = await supabase.auth.getSession();
           if (sessionData.session) {
@@ -155,16 +155,17 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
           }
           await new Promise((r) => setTimeout(r, 250));
         }
+  
         setInlineError(t("loginFailed"));
       } catch (err) {
         setInlineError(err.message || t("loginError"));
       } finally {
         setLoading(false);
       }
-    };
+    }, [email, password, emailMode, validate, setStepSmart, loading, t]);
   
-    // Google OAuth Login
-    const handleGoogleLogin = async () => {
+    // ✅ Google OAuth Login
+    const handleGoogleLogin = useCallback(async () => {
       setGoogleLoading(true);
       setInlineError("");
   
@@ -179,10 +180,10 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       } finally {
         setGoogleLoading(false);
       }
-    };
+    }, [t]);
   
-    // Password Reset Function
-    const handleResetPassword = async () => {
+    // ✅ Password Reset Function
+    const handleResetPassword = useCallback(async () => {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         setErrors({ email: t("invalidEmail") });
         return;
@@ -200,9 +201,9 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       } finally {
         setLoading(false);
       }
-    };
+    }, [email, t]);
   
-    // JSX: Login Form UI
+    // ✅ JSX: Login Form UI
     const renderLoginForm = () => (
       <div>
         <h3 className="text-xl font-semibold text-center mb-4">{t("login")}</h3>
@@ -235,7 +236,11 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
           {successMessage && <p className="text-xs text-green-600 text-center">{successMessage}</p>}
           {inlineError && <p className="text-xs text-red-500 text-center">{inlineError}</p>}
   
-          <button type="submit" disabled={loading} className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition">
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-black text-white py-2 rounded-md hover:opacity-90 transition"
+          >
             {loading ? t("loading") + "..." : emailMode === "reset" ? t("sendResetLink") : t(emailMode)}
           </button>
         </form>
@@ -267,8 +272,8 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       </div>
     );
 
-      // Subscription with Stripe (Secure Checkout)
-  const handleSubscribe = async () => {
+      // ✅ Subscription with Stripe (Secure Checkout)
+  const handleSubscribe = useCallback(async () => {
     setLoading(true);
     setInlineError("");
 
@@ -277,21 +282,25 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       const token = sessionData?.session?.access_token;
       if (!token) {
         setInlineError(t("notLoggedIn"));
+        setLoading(false);
         return;
       }
 
-      const response = await fetch("https://aftjpjxbcmzswhxitozl.supabase.co/functions/v1/create-checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          price_id: selectedPlanData.priceId,
-          success_url: `${window.location.origin}/?fromStripe=true`,
-          cancel_url: `${window.location.origin}/`,
-        }),
-      });
+      const response = await fetch(
+        "https://aftjpjxbcmzswhxitozl.supabase.co/functions/v1/create-checkout",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            price_id: selectedPlanData.priceId,
+            success_url: `${window.location.origin}/?fromStripe=true`,
+            cancel_url: `${window.location.origin}/`,
+          }),
+        }
+      );
 
       const data = await response.json();
       if (data?.url) {
@@ -300,14 +309,15 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
         setInlineError(t("checkoutError"));
       }
     } catch (err) {
+      console.error("❌ Error during Stripe subscription:", err);
       setInlineError(t("checkoutError"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedPlanData, t]);
 
-  // Download CV Function
-  const handleDownload = async () => {
+  // ✅ Download CV Function
+  const handleDownload = useCallback(async () => {
     setLoading(true);
     try {
       const personal = cvData?.data?.personal || {};
@@ -321,14 +331,15 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
 
       onDownload?.();
       onClose?.();
-    } catch {
+    } catch (err) {
+      console.error("❌ Error during CV download:", err);
       setInlineError(t("downloadError"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [cvData, onDownload, onClose, user]);
 
-  // JSX: Subscription Step UI
+  // ✅ JSX: Subscription Step UI
   const renderSubscriptionStep = () => (
     <div>
       <h3 className="text-xl font-semibold text-center mb-4">{t("selectSubscriptionToProceed")}</h3>
@@ -358,10 +369,11 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       >
         {loading ? t("loading") + "..." : t("try3DaysFor", { price: "€1,95" })}
       </button>
+      {inlineError && <p className="text-xs text-red-500 text-center mt-2">{inlineError}</p>}
     </div>
   );
 
-  // JSX: Download Step UI
+  // ✅ JSX: Download Step UI
   const renderDownloadStep = () => (
     <div className="text-center space-y-4">
       <div className="text-4xl">✅</div>
