@@ -21,7 +21,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const isValidUrl = (url: string) => {
+const isValidUrl = (url) => {
   try {
     const parsed = new URL(url);
     return parsed.hostname === "app.cvitae.nl";
@@ -45,6 +45,7 @@ serve(async (req) => {
     } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
+      console.error("❌ Unauthorized:", authError);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: CORS_HEADERS,
@@ -58,10 +59,11 @@ serve(async (req) => {
       "price_1RFc3fRpTB9d9YyvRz2fYeGM", // 1 month
       "price_1RFcEJRpTB9d9YyvOYdhdKEn", // 3 months
       "price_1RFcEhRpTB9d9Yyvv0ydhDW4", // 6 months
-      "price_1RFcF3RpTB9d9Yyvi2ILDgHI", // 1 year
+      "price_1RFcF3RpTB9d9Yvi2ILDgHI", // 1 year
     ]);
 
     if (!allowedPrices.has(price_id)) {
+      console.error("❌ Invalid price ID:", price_id);
       return new Response(JSON.stringify({ error: "Invalid price_id" }), {
         status: 400,
         headers: CORS_HEADERS,
@@ -76,19 +78,51 @@ serve(async (req) => {
       ? cancel_url
       : "https://app.cvitae.nl/";
 
-    const { data: profile } = await supabase
+    // Retrieve or create Stripe customer
+    let stripeCustomerId;
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("stripe_customer_id")
       .eq("id", user.id)
       .maybeSingle();
 
-    const stripeCustomerId = profile?.stripe_customer_id || undefined;
+    if (profileError) {
+      console.error("❌ Error fetching profile:", profileError);
+    }
 
+    if (profile?.stripe_customer_id) {
+      stripeCustomerId = profile.stripe_customer_id;
+      console.log("✅ Existing Stripe Customer ID:", stripeCustomerId);
+    } else {
+      console.log("⚡ Creating new Stripe customer...");
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
+        metadata: { user_id: user.id },
+      });
+
+      stripeCustomerId = customer.id;
+      console.log("✅ New Stripe Customer ID:", stripeCustomerId);
+
+      // Save the Stripe Customer ID to profile
+      const { error: saveError } = await supabase
+        .from("profiles")
+        .update({ stripe_customer_id: stripeCustomerId })
+        .eq("id", user.id);
+
+      if (saveError) {
+        console.error("❌ Error saving Stripe Customer ID to profile:", saveError);
+        return new Response(JSON.stringify({ error: "Profile update failed" }), {
+          status: 500,
+          headers: CORS_HEADERS,
+        });
+      }
+    }
+
+    // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
-      ...(stripeCustomerId
-        ? { customer: stripeCustomerId }
-        : { customer_email: user.email }),
+      customer: stripeCustomerId,
       client_reference_id: user.id,
       success_url: safeSuccessUrl,
       cancel_url: safeCancelUrl,
@@ -112,6 +146,8 @@ serve(async (req) => {
         trial_period_days: 3,
       },
     });
+
+    console.log("✅ Stripe Checkout Session Created:", session.url);
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: {

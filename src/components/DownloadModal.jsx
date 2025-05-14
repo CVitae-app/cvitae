@@ -281,6 +281,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
             </button>
           </div>
         )}
+
         {successMessage && <p className="text-xs text-green-600 text-center">{successMessage}</p>}
         {inlineError && <p className="text-xs text-red-500 text-center">{inlineError}</p>}
 
@@ -299,6 +300,24 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
         </span>
         <span onClick={() => setEmailMode("reset")}>{t("forgotPassword")}</span>
       </div>
+
+      <div className="relative py-3">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-gray-300"></div>
+        </div>
+        <div className="relative text-center text-xs text-gray-500 bg-white w-fit mx-auto px-2">
+          {t("orContinueWith")}
+        </div>
+      </div>
+
+      <button
+        onClick={handleGoogleLogin}
+        disabled={googleLoading}
+        className="w-full border border-gray-300 py-2 rounded-md flex items-center justify-center gap-2 mt-3"
+      >
+        <img src="https://authjs.dev/img/providers/google.svg" alt="Google" className="w-4 h-4" />
+        {googleLoading ? t("loading") + "..." : t("continueWithGoogle")}
+      </button>
     </div>
   );
 

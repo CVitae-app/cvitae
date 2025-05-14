@@ -13,7 +13,7 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
 const endpointSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 
 // Map Stripe price IDs to internal plan IDs
-const planMap: Record<string, string> = {
+const planMap = {
   "price_1RFc3fRpTB9d9YyvRz2fYeGM": "1month",
   "price_1RFcEJRpTB9d9YyvOYdhdKEn": "3months",
   "price_1RFcEhRpTB9d9Yyvv0ydhDW4": "6months",
@@ -28,7 +28,7 @@ serve(async (req) => {
     const body = await req.text();
     const encoder = new TextEncoder();
     const bodyBuffer = encoder.encode(body);
-    event = await stripe.webhooks.constructEventAsync(bodyBuffer, sig!, endpointSecret);
+    event = await stripe.webhooks.constructEventAsync(bodyBuffer, sig, endpointSecret);
   } catch (err) {
     console.error("❌ Webhook verification failed:", err.message);
     return new Response("Webhook Error", { status: 400 });
@@ -37,13 +37,11 @@ serve(async (req) => {
   console.log("✅ Received Stripe Event:", event.type);
 
   const obj = event.data.object;
+  const customerId = obj.customer as string;
+  console.log("✅ Stripe Customer ID:", customerId);
 
-  // ✅ Handle Subscription Events (create, update, delete)
-  if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)) {
-    const customerId = obj.customer as string;
-    const status = obj.status;
-    console.log("✅ Subscription Event - Status:", status);
-
+  // Helper function to update subscription status
+  async function updateSubscriptionStatus(customerId, isSubscribed, plan = null, subscriptionId = null, priceId = null) {
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("id")
@@ -55,16 +53,11 @@ serve(async (req) => {
       return new Response("User not found", { status: 404 });
     }
 
-    const isSubscribed = status === "active" || status === "trialing";
-    const subscriptionId = obj.id;
-    const priceId = obj.items?.data?.[0]?.price?.id ?? null;
-    const subscriptionPlan = priceId ? planMap[priceId] || null : null;
-
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
         is_subscribed: isSubscribed,
-        subscription_plan: subscriptionPlan,
+        subscription_plan: plan,
         stripe_subscription_id: subscriptionId,
         stripe_price_id: priceId,
       })
@@ -78,7 +71,7 @@ serve(async (req) => {
     console.log("✅ Subscription Updated:", {
       userId: profile.id,
       isSubscribed,
-      subscriptionPlan,
+      plan,
       subscriptionId,
       priceId,
     });
@@ -86,53 +79,46 @@ serve(async (req) => {
     return new Response("OK", { status: 200 });
   }
 
+  // ✅ Handle Subscription Events (create, update, delete)
+  if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)) {
+    const status = obj.status;
+    const isSubscribed = status === "active" || status === "trialing";
+    const subscriptionId = obj.id;
+    const priceId = obj.items?.data?.[0]?.price?.id ?? null;
+    const subscriptionPlan = priceId ? planMap[priceId] || null : null;
+
+    console.log("✅ Processing Subscription Event:", {
+      customerId,
+      status,
+      isSubscribed,
+      subscriptionId,
+      priceId,
+      subscriptionPlan,
+    });
+
+    return await updateSubscriptionStatus(customerId, isSubscribed, subscriptionPlan, subscriptionId, priceId);
+  }
+
   // ✅ Handle Payment Success (backup in case subscription fails)
   if (event.type === "invoice.payment_succeeded") {
-    const customerId = obj.customer as string;
+    console.log("✅ Payment Succeeded Event:", {
+      customerId,
+      subscriptionId: obj.subscription,
+    });
 
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("stripe_customer_id", customerId)
-      .single();
-
-    if (!profile || error) {
-      console.error("❌ No user found for invoice.customer:", customerId);
-      return new Response("User not found", { status: 404 });
-    }
-
-    await supabase
-      .from("profiles")
-      .update({ is_subscribed: true })
-      .eq("id", profile.id);
-
-    console.log("✅ Marked user as subscribed (payment_succeeded)");
-    return new Response("OK", { status: 200 });
+    return await updateSubscriptionStatus(customerId, true);
   }
 
   // ✅ Handle Payment Failure (optional)
   if (event.type === "invoice.payment_failed") {
-    const customerId = obj.customer as string;
+    console.log("❌ Payment Failed Event:", {
+      customerId,
+      subscriptionId: obj.subscription,
+    });
 
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("stripe_customer_id", customerId)
-      .single();
-
-    if (!profile || error) {
-      console.error("❌ No user found for failed invoice:", customerId);
-      return new Response("User not found", { status: 404 });
-    }
-
-    await supabase
-      .from("profiles")
-      .update({ is_subscribed: false })
-      .eq("id", profile.id);
-
-    console.log("❌ Marked user as unsubscribed (payment_failed)");
-    return new Response("OK", { status: 200 });
+    return await updateSubscriptionStatus(customerId, false);
   }
 
+  console.log("⚠️ Event type ignored:", event.type);
   return new Response("Ignored", { status: 200 });
 });
