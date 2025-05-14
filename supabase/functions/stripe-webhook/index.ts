@@ -35,13 +35,20 @@ serve(async (req) => {
   }
 
   console.log("✅ Received Stripe Event:", event.type);
-
   const obj = event.data.object;
   const customerId = obj.customer as string;
   console.log("✅ Stripe Customer ID:", customerId);
 
-  // Helper function to update subscription status
-  async function updateSubscriptionStatus(customerId, isSubscribed, plan = null, subscriptionId = null, priceId = null) {
+  async function updateSubscriptionStatus(
+    customerId,
+    isSubscribed,
+    plan = null,
+    subscriptionId = null,
+    priceId = null,
+    subscriptionEnds = null,
+    status = null,
+    trialEnds = null
+  ) {
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("id")
@@ -60,6 +67,9 @@ serve(async (req) => {
         subscription_plan: plan,
         stripe_subscription_id: subscriptionId,
         stripe_price_id: priceId,
+        subscription_ends: subscriptionEnds,
+        subscription_status: status,
+        trial_ends: trialEnds,
       })
       .eq("id", profile.id);
 
@@ -74,51 +84,34 @@ serve(async (req) => {
       plan,
       subscriptionId,
       priceId,
+      subscriptionEnds,
+      status,
+      trialEnds,
     });
 
     return new Response("OK", { status: 200 });
   }
 
-  // ✅ Handle Subscription Events (create, update, delete)
   if (["customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"].includes(event.type)) {
     const status = obj.status;
     const isSubscribed = status === "active" || status === "trialing";
     const subscriptionId = obj.id;
     const priceId = obj.items?.data?.[0]?.price?.id ?? null;
     const subscriptionPlan = priceId ? planMap[priceId] || null : null;
+    const subscriptionEnds = obj.current_period_end ? new Date(obj.current_period_end * 1000).toISOString() : null;
+    const trialEnds = obj.trial_end ? new Date(obj.trial_end * 1000).toISOString() : null;
 
-    console.log("✅ Processing Subscription Event:", {
+    return await updateSubscriptionStatus(
       customerId,
-      status,
       isSubscribed,
+      subscriptionPlan,
       subscriptionId,
       priceId,
-      subscriptionPlan,
-    });
-
-    return await updateSubscriptionStatus(customerId, isSubscribed, subscriptionPlan, subscriptionId, priceId);
+      subscriptionEnds,
+      status,
+      trialEnds
+    );
   }
 
-  // ✅ Handle Payment Success (backup in case subscription fails)
-  if (event.type === "invoice.payment_succeeded") {
-    console.log("✅ Payment Succeeded Event:", {
-      customerId,
-      subscriptionId: obj.subscription,
-    });
-
-    return await updateSubscriptionStatus(customerId, true);
-  }
-
-  // ✅ Handle Payment Failure (optional)
-  if (event.type === "invoice.payment_failed") {
-    console.log("❌ Payment Failed Event:", {
-      customerId,
-      subscriptionId: obj.subscription,
-    });
-
-    return await updateSubscriptionStatus(customerId, false);
-  }
-
-  console.log("⚠️ Event type ignored:", event.type);
   return new Response("Ignored", { status: 200 });
 });

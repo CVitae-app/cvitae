@@ -60,7 +60,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       setStep("login");
       return;
     }
-
+  
     try {
       const { data: profile } = await supabase
         .from("profiles")
@@ -76,7 +76,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       setStep("subscribe");
     }
   }, [user, t, isHydrated]);
-
+  
   useEffect(() => {
     if (isOpen) {
       setEmail("");
@@ -86,10 +86,14 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
       setSuccessMessage("");
       setLoading(false);
       setGoogleLoading(false);
-
+  
       const url = new URL(window.location.href);
       if (url.searchParams.get("fromStripe") === "true") {
-        refreshSession().then(setStepSmart);
+        refreshSession().then(() => {
+          setTimeout(() => {
+            setStepSmart();
+          }, 500);
+        });
         url.searchParams.delete("fromStripe");
         window.history.replaceState(null, "", url.pathname);
       } else if (startAtSubscribe) {
@@ -98,7 +102,7 @@ function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe =
         setStepSmart();
       }
     }
-  }, [isOpen, user, startAtSubscribe, setStepSmart, refreshSession]);
+  }, [isOpen, user, startAtSubscribe, setStepSmart, refreshSession]);  
 
   useEffect(() => {
     const closeOnEscapeOrClickOutside = (e) => {

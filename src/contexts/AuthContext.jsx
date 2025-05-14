@@ -8,8 +8,6 @@ import {
 } from "react";
 import { supabase } from "@/utils/supabaseClient";
 import { sendEmail } from "@/utils/email";
-import dayjs from "dayjs";
-import "dayjs/locale/nl";
 
 const AuthContext = createContext();
 
@@ -19,62 +17,65 @@ export const AuthProvider = ({ children }) => {
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const currentUser = sessionData?.session?.user || null;
-
-        if (currentUser) {
-          const enrichedUser = await fetchUserProfile(currentUser);
-          setUser(enrichedUser);
-          localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
-          console.log("✅ Auth Initialized - User Loaded:", enrichedUser);
-        } else {
-          setUser(null);
-          localStorage.removeItem("auth_user");
-          console.warn("❌ No active session - User logged out");
-        }
-      } catch (error) {
-        console.error("❌ Error initializing auth:", error);
-        setUser(null);
-      } finally {
-        setLoading(false);
-        setIsHydrated(true);
-        console.log("✅ Auth Initialized - Is Hydrated:", true);
-      }
-    };
-
     initializeAuth();
+  }, []);
 
+  // ✅ Initialize Authentication State
+  const initializeAuth = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentUser = sessionData?.session?.user || null;
+
+      if (currentUser) {
+        const enrichedUser = await fetchUserProfile(currentUser);
+        setUser(enrichedUser);
+        secureLocalStorage("auth_user", enrichedUser);
+        console.log("✅ Auth Initialized - User Loaded:", enrichedUser);
+      } else {
+        setUser(null);
+        secureLocalStorage("auth_user", null);
+        console.warn("❌ No active session - User logged out");
+      }
+    } catch (error) {
+      console.error("❌ Error initializing auth:", error);
+      setUser(null);
+    } finally {
+      setLoading(false);
+      setIsHydrated(true);
+      console.log("✅ Auth Initialized - Is Hydrated:", true);
+    }
+
+    // ✅ Listen to Auth State Changes Automatically
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log("✅ Auth State Changed - Event:", event);
         if (session?.user) {
           const enrichedUser = await fetchUserProfile(session.user);
           setUser(enrichedUser);
-          localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
+          secureLocalStorage("auth_user", enrichedUser);
           console.log("✅ Auth State Changed - User:", enrichedUser);
         } else {
           setUser(null);
-          localStorage.removeItem("auth_user");
+          secureLocalStorage("auth_user", null);
           console.warn("❌ Auth State Changed - User logged out");
         }
         setIsHydrated(true);
-        console.log("✅ Auth State Change Completed - Is Hydrated:", true);
       }
     );
 
     return () => {
       listener?.subscription?.unsubscribe?.();
     };
-  }, []);
+  };
 
-  // ✅ Fetches user profile and enriches the user object
-  const fetchUserProfile = async (currentUser) => {
+  // ✅ Fetches and Enriches User Profile Securely
+  const fetchUserProfile = useCallback(async (currentUser) => {
     try {
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("language, first_name, is_subscribed")
+        .select(
+          "language, first_name, last_name, email, is_subscribed, subscription_plan, subscription_status, subscription_ends, trial_ends"
+        )
         .eq("id", currentUser.id)
         .single();
 
@@ -86,46 +87,34 @@ export const AuthProvider = ({ children }) => {
         ...currentUser,
         language: profile?.language || "en",
         firstName: profile?.first_name || "there",
+        lastName: profile?.last_name || "",
+        email: profile?.email || currentUser.email,
         isSubscribed: profile?.is_subscribed || false,
+        subscriptionPlan: profile?.subscription_plan || null,
+        subscriptionStatus: profile?.subscription_status || null,
+        subscriptionEnds: profile?.subscription_ends || null,
+        trialEnds: profile?.trial_ends || null,
       };
     } catch (err) {
       console.error("❌ Error enriching user:", err);
       return { ...currentUser, language: "en", firstName: "there" };
     }
-  };
-
-  // ✅ Handles new user signup, including profile creation and welcome email
-  const handleNewUserSignup = async (newUser) => {
-    try {
-      const language = navigator.language.startsWith("nl") ? "nl" : "en";
-      const firstName = newUser.user_metadata?.firstName || "there";
-
-      await supabase.from("profiles").upsert({
-        id: newUser.id,
-        email: newUser.email,
-        language,
-        first_name: firstName,
-      });
-
-      console.log("✅ User Profile Created for:", newUser.email);
-    } catch (error) {
-      console.error("❌ Error during signup process:", error);
-    }
-  };
-
-  // ✅ Logout function (clears user and localStorage)
-  const logout = useCallback(async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      localStorage.removeItem("auth_user");
-      console.log("✅ User logged out");
-    } catch (error) {
-      console.error("❌ Error during logout:", error);
-    }
   }, []);
 
-  // ✅ Refresh session and re-fetch user data
+  // ✅ Securely Manages Local Storage to Prevent Stale Data
+  const secureLocalStorage = (key, value) => {
+    try {
+      if (value) {
+        localStorage.setItem(key, JSON.stringify(value));
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch (error) {
+      console.error("❌ Error setting local storage:", error);
+    }
+  };
+
+  // ✅ Refreshes the Session and User Profile Securely
   const refreshSession = useCallback(async () => {
     try {
       console.log("✅ Refreshing session...");
@@ -135,29 +124,57 @@ export const AuthProvider = ({ children }) => {
       if (currentUser) {
         const enrichedUser = await fetchUserProfile(currentUser);
         setUser(enrichedUser);
-        localStorage.setItem("auth_user", JSON.stringify(enrichedUser));
+        secureLocalStorage("auth_user", enrichedUser);
         console.log("✅ Session refreshed - User:", enrichedUser);
       } else {
         setUser(null);
-        localStorage.removeItem("auth_user");
+        secureLocalStorage("auth_user", null);
         console.warn("❌ Session refresh - No active session");
       }
     } catch (error) {
       console.error("❌ Error during session refresh:", error);
       setUser(null);
     }
+  }, [fetchUserProfile]);
+
+  // ✅ Directly Refreshes User Profile (Subscription Updates)
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+    try {
+      console.log("✅ Refreshing user profile...");
+      const enrichedUser = await fetchUserProfile(user);
+      setUser(enrichedUser);
+      secureLocalStorage("auth_user", enrichedUser);
+      console.log("✅ User profile refreshed:", enrichedUser);
+    } catch (error) {
+      console.error("❌ Error refreshing user profile:", error);
+    }
+  }, [user, fetchUserProfile]);
+
+  // ✅ Logout and Clear User Securely
+  const logout = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      secureLocalStorage("auth_user", null);
+      console.log("✅ User logged out");
+    } catch (error) {
+      console.error("❌ Error during logout:", error);
+    }
   }, []);
 
-  // ✅ Memoized context value for performance
+  // ✅ Memoized Context Value for Best Performance
   const authContextValue = useMemo(
-    () => ({ user, logout, loading, isHydrated, refreshSession }),
-    [user, logout, loading, isHydrated, refreshSession]
+    () => ({
+      user,
+      loading,
+      isHydrated,
+      logout,
+      refreshSession,
+      refreshProfile,
+    }),
+    [user, loading, isHydrated, logout, refreshSession, refreshProfile]
   );
-
-  useEffect(() => {
-    console.log("✅ AuthContext - User state changed:", user);
-    console.log("✅ AuthContext - Is Hydrated:", isHydrated);
-  }, [user, isHydrated]);
 
   return (
     <AuthContext.Provider value={authContextValue}>
@@ -166,7 +183,7 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// ✅ Custom hook to use the AuthContext
+// ✅ Custom Hook to Securely Use AuthContext
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
