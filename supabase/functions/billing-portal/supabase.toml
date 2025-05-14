@@ -1,0 +1,3 @@
+name = "billing-portal"
+region = "eu-central-1"  # Change to your preferred region
+verify_jwt = false

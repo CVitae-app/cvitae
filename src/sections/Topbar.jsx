@@ -9,7 +9,6 @@ import {
   HomeIcon,
   PencilIcon,
   UserCircleIcon,
-  XMarkIcon,
 } from "@heroicons/react/24/outline";
 
 function TopBar({
@@ -22,7 +21,7 @@ function TopBar({
   hideDashboard = false,
 }) {
   const { t, language, setLanguage } = useTranslation();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -173,17 +172,6 @@ function TopBar({
             title={t("profile")}
           >
             <UserCircleIcon className="w-6 h-6 text-gray-600" />
-          </button>
-        )}
-
-        {/* Logout Button (Only if logged in) */}
-        {user && (
-          <button
-            onClick={logout}
-            className="p-2 rounded-full hover:bg-red-100 transition"
-            title="Logout"
-          >
-            <XMarkIcon className="w-5 h-5 text-red-500" />
           </button>
         )}
       </div>
