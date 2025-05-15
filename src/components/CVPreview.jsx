@@ -240,7 +240,7 @@ export default function CVPreview({
 
       chunks.forEach((chunk, index) => {
         const height = chunk.offsetHeight;
-        if (heightSoFar + height <= A4_HEIGHT) {
+        if (heightSoFar + height <= A4_HEIGHT - 1) {
           currentPage.push(index);
           heightSoFar += height;
         } else {
@@ -258,8 +258,8 @@ export default function CVPreview({
       if (!wrapperRef.current) return;
       const wrapperWidth = wrapperRef.current.offsetWidth;
       const proposedScale = isCompact
-        ? Math.min(wrapperWidth / A4_WIDTH, 0.34)
-        : Math.min(1, wrapperWidth / A4_WIDTH);
+  ? Math.min(wrapperWidth / A4_WIDTH, 0.34)
+  : Math.min(wrapperWidth / A4_WIDTH, 1);
 
       if (Math.abs(scale - proposedScale) > 0.001 && proposedScale > 0) {
         setScale(proposedScale);
@@ -280,7 +280,7 @@ export default function CVPreview({
       className={`w-full h-full flex justify-center items-start bg-transparent overflow-x-hidden print:scale-[1] ${
         isCompact ? "" : "overflow-y-auto"
       }`}
-      style={{ paddingTop: isCompact ? 0 : "56px" }}
+      style={{ paddingTop: isCompact ? 0 : "0px" }}
     >
       <div
         ref={measuringRef}
@@ -321,7 +321,7 @@ export default function CVPreview({
         className="flex justify-center"
         style={{
           minHeight: isCompact ? undefined : `${A4_HEIGHT * scale}px`,
-          alignItems: isCompact ? "flex-start" : "flex-end",
+          alignItems: "flex-start",
           transform: `scale(${scale})`,
           transformOrigin: "top center",
         }}
