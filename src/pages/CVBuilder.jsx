@@ -69,8 +69,6 @@ export default function CVBuilder() {
   const { t, ready } = useTranslation();
   const { user } = useAuth();
   const previewRef = useRef();
-
-  const [mobileScale, setMobileScale] = useState(1); // ✅ for dynamic preview height
   const [showModal, setShowModal] = useState(false);
   const [forceSubscribeStep, setForceSubscribeStep] = useState(false);
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
@@ -101,9 +99,7 @@ export default function CVBuilder() {
   );
 
   useEffect(() => {
-    if (!storedName && ready) {
-      setCvName(t("cvWithoutName"));
-    }
+    if (!storedName && ready) setCvName(t("cvWithoutName"));
   }, [ready, storedName, t]);
 
   useEffect(() => {
@@ -113,7 +109,6 @@ export default function CVBuilder() {
     if (checkoutStatus === "success") {
       setShowModal(true);
       setForceSubscribeStep(true);
-
       setTimeout(() => {
         const newUrl = new URL(window.location.href);
         newUrl.searchParams.delete("checkout");
@@ -139,12 +134,10 @@ export default function CVBuilder() {
     ],
   }), [t]);
 
-  const fixedSteps = stepDefinitions.fixed;
-  const suggestions = stepDefinitions.suggestions;
-
-  const allSteps = useMemo(() =>
-    [...fixedSteps, ...suggestions.filter(s => dynamicSteps.includes(s.key))]
-  , [fixedSteps, suggestions, dynamicSteps]);
+  const allSteps = useMemo(() => [
+    ...stepDefinitions.fixed,
+    ...stepDefinitions.suggestions.filter((s) => dynamicSteps.includes(s.key)),
+  ], [stepDefinitions, dynamicSteps]);
 
   const safeStep = Math.min(step, allSteps.length - 1);
   const { key: activeKey, Component: ActiveComponent } = allSteps[safeStep] || {};
@@ -159,13 +152,12 @@ export default function CVBuilder() {
       const updated = [...dynamicSteps, key];
       setDynamicSteps(updated);
       localStorage.setItem(FORM_KEYS.local.dynamic, JSON.stringify(updated));
-      const newIndex = fixedSteps.length + updated.findIndex(k => k === key);
-      updateStep(newIndex);
+      updateStep(stepDefinitions.fixed.length + updated.findIndex((k) => k === key));
     }
-  }, [dynamicSteps, fixedSteps.length, updateStep]);
+  }, [dynamicSteps, stepDefinitions.fixed.length, updateStep]);
 
   const removeDynamicStep = useCallback((key) => {
-    const updated = dynamicSteps.filter(k => k !== key);
+    const updated = dynamicSteps.filter((k) => k !== key);
     setDynamicSteps(updated);
     localStorage.setItem(FORM_KEYS.local.dynamic, JSON.stringify(updated));
     if (activeKey === key) updateStep(Math.max(0, safeStep - 1));
@@ -187,9 +179,7 @@ export default function CVBuilder() {
       updated_at: new Date().toISOString(),
     };
 
-    supabase.from("cvs").upsert(payload).then(({ error }) => {
-      if (error) console.error("❌ Supabase sync error:", error.message);
-    });
+    supabase.from("cvs").upsert(payload);
   }, 500);
 
   const handleFormUpdate = useCallback((key, data) => {
@@ -221,11 +211,6 @@ export default function CVBuilder() {
         .eq("id", id)
         .single()
         .then(({ data, error }) => {
-          if (error) {
-            console.error("❌ Failed to load CV:", error.message);
-            return;
-          }
-
           if (data) {
             data.name && setCvName(data.name);
             data.data && setFormData(data.data);
@@ -237,9 +222,9 @@ export default function CVBuilder() {
   }, [user, updateStep, setFormData]);
 
   useEffect(() => {
-    const maxStep = fixedSteps.length + dynamicSteps.length - 1;
+    const maxStep = stepDefinitions.fixed.length + dynamicSteps.length - 1;
     if (step > maxStep) updateStep(maxStep);
-  }, [dynamicSteps]);
+  }, [dynamicSteps, step, stepDefinitions.fixed.length, updateStep]);
 
   useEffect(() => {
     localStorage.setItem(FORM_KEYS.local.name, cvName);
@@ -275,66 +260,67 @@ export default function CVBuilder() {
         />
 
         <div className="flex-1 flex flex-col xl:grid xl:grid-cols-[220px_minmax(300px,1fr)_minmax(794px,1fr)] overflow-hidden">
-          <div className="hidden xl:block bg-gray-50">
-            <Sidebar
-              currentStep={safeStep}
-              setStep={updateStep}
-              dynamicSteps={dynamicSteps}
-              onAddStep={addDynamicStep}
-              onRemoveStep={removeDynamicStep}
-              onDownload={() => setShowModal(true)}
-            />
-          </div>
+          <Sidebar
+            currentStep={safeStep}
+            setStep={updateStep}
+            dynamicSteps={dynamicSteps}
+            onAddStep={addDynamicStep}
+            onRemoveStep={removeDynamicStep}
+            onDownload={() => setShowModal(true)}
+          />
 
-          <div className="overflow-y-auto w-full bg-gray-50 px-4 pt-4 pb-[120px] max-w-full">
-            <div className="block xl:hidden">
-              {allSteps.map(({ key, label, Component }) => (
-                <div key={key} className="mb-3 border border-gray-200 rounded-xl bg-white">
-                  <button
-                    className="w-full flex justify-between items-center px-4 py-3 font-medium text-left"
-                    onClick={() => setOpenedKey(prev => (prev === key ? null : key))}
-                    aria-expanded={openedKey === key}
-                    aria-controls={`form-section-${key}`}
-                  >
-                    <span>{label}</span>
-                  </button>
-                  <AnimatePresence initial={false}>
-                    {openedKey === key && (
-                      <motion.div
-                        id={`form-section-${key}`}
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.25 }}
-                        className="overflow-hidden px-4 pb-4"
-                      >
-                        <Component
-                          value={formData[key]}
-                          onChange={(data) => handleFormUpdate(key, data)}
-                          currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              ))}
-            </div>
+<div className="overflow-y-auto w-full bg-gray-50 px-4 pt-4 pb-[120px] max-w-full">
+  {/* Mobile Accordion (Only on Mobile) */}
+  <div className="block xl:hidden">
+    {allSteps.map(({ key, label, Component }) => (
+      <div key={key} className="mb-3 border rounded-xl bg-white">
+        <button
+          className="w-full flex justify-between items-center px-4 py-3 font-medium text-left"
+          onClick={() => setOpenedKey(prev => (prev === key ? null : key))}
+        >
+          <span>{label}</span>
+        </button>
+        <AnimatePresence>
+          {openedKey === key && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden px-4 pb-4"
+            >
+              <Component
+                value={formData[key]}
+                onChange={(data) => handleFormUpdate(key, data)}
+                currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    ))}
+  </div>
 
-            <div className="hidden xl:block">
-              {ActiveComponent ? (
-                <ActiveComponent
-                  value={formData[activeKey]}
-                  onChange={(data) => handleFormUpdate(activeKey, data)}
-                  currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
-                />
-              ) : (
-                <p className="text-gray-500 italic">{t("stepNotFound")}</p>
-              )}
-            </div>
-          </div>
+  {/* Desktop View (Only Active Step) */}
+  <div className="hidden xl:block">
+    {ActiveComponent ? (
+      <div className="mb-6">
+        <ActiveComponent
+          value={formData[activeKey]}
+          onChange={(data) => handleFormUpdate(activeKey, data)}
+          currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
+        />
+      </div>
+    ) : (
+      <p className="text-gray-500 italic">{t("stepNotFound")}</p>
+    )}
+  </div>
+</div>
 
-          <div className="relative h-full bg-gray-100 overflow-auto px-4 py-6 hidden xl:flex flex-col items-center">
-            <div className="w-full max-w-[794px] rounded-2xl bg-white shadow-2xl overflow-hidden mb-0">
+          <div
+            className="relative h-full bg-gray-100 overflow-auto px-4 py-6 hidden xl:flex flex-col items-center"
+            onContextMenu={(e) => e.preventDefault()}
+          >
+            <div className="w-full max-w-[794px] rounded-2xl bg-white shadow-2xl overflow-hidden">
               <CVPreview
                 data={{ ...formData, workExperience: formData.work }}
                 dynamicSteps={dynamicSteps}
@@ -344,28 +330,25 @@ export default function CVBuilder() {
               />
             </div>
           </div>
-
-          {showPreviewMobile && (
-            <div
-              className="xl:hidden fixed inset-0 z-30 bg-gray-50 overflow-y-auto pt-4 px-4"
-              style={{ paddingBottom: "0px" }}
-            >
-              <div
-  className="w-full max-w-[794px] mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden"
->
-                <CVPreview
-                  data={{ ...formData, workExperience: formData.work }}
-                  dynamicSteps={dynamicSteps}
-                  settings={settings}
-                  setSettings={setSettings}
-                  currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
-                  onScaleChange={setMobileScale}
-                />
-              </div>
-            </div>
-          )}
         </div>
 
+        {/* Mobile Preview Toggle */}
+        {showPreviewMobile && (
+          <div className="xl:hidden fixed inset-0 z-30 bg-gray-50 overflow-y-auto pt-4 px-4">
+            <div className="w-full max-w-[794px] mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+              <CVPreview
+                data={{ ...formData, workExperience: formData.work }}
+                dynamicSteps={dynamicSteps}
+                settings={settings}
+                setSettings={setSettings}
+                currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
+                onScaleChange={(scale) => setShowPreviewMobile(scale > 0)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* FloatingBar (Fixed Bottom) */}
         <div className="fixed bottom-4 right-4 z-50 hidden xl:block">
           <FloatingBar
             onChange={handleSettingsChange}
@@ -374,18 +357,20 @@ export default function CVBuilder() {
           />
         </div>
 
+        {/* Mobile FloatingBar */}
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 px-4 py-4 xl:hidden">
           <div className="max-w-screen-sm mx-auto w-full">
             <FloatingBar
               onChange={handleSettingsChange}
               settings={settings}
               onRequireAuth={() => !user && setShowModal(true)}
-              onTogglePreview={() => setShowPreviewMobile(prev => !prev)}
+              onTogglePreview={() => setShowPreviewMobile((prev) => !prev)}
               isPreviewOpen={showPreviewMobile}
             />
           </div>
         </div>
 
+        {/* Download Modal */}
         <DownloadModal
           isOpen={showModal}
           onClose={() => setShowModal(false)}
@@ -399,6 +384,7 @@ export default function CVBuilder() {
           startAtSubscribe={forceSubscribeStep}
         />
 
+        {/* Hidden CVPreview for Accurate Export */}
         <div style={{ position: "absolute", top: 0, left: "-9999px", width: "794px", height: "1123px" }}>
           <div ref={previewRef}>
             <CVPreview
@@ -406,7 +392,7 @@ export default function CVBuilder() {
               dynamicSteps={dynamicSteps}
               settings={settings}
               currentCVId={localStorage.getItem(FORM_KEYS.local.id)}
-              onScaleChange={() => {}} // no-op
+              onScaleChange={() => {}} // No-op for hidden preview
             />
           </div>
         </div>
