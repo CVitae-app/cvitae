@@ -19,21 +19,11 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useTranslation } from "../../contexts/LanguageContext";
 
-const defaultLanguage = () => ({
-  id: crypto.randomUUID(),
-  naam: "",
-  niveau: "",
-});
+const MAX_LANGUAGES = 5;
+const defaultLanguage = () => ({ id: crypto.randomUUID(), naam: "", niveau: "" });
 
 const SortableItem = ({ id, children }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   return (
     <motion.div
@@ -58,39 +48,44 @@ const SortableItem = ({ id, children }) => {
 function Languages({ value = [], onChange }) {
   const { t } = useTranslation();
   const [languages, setLanguagesState] = useState([]);
+  const [input, setInput] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     setLanguagesState(Array.isArray(value) ? value : []);
   }, [value]);
 
-  const setLanguages = useCallback((next) => {
-    const resolved = typeof next === "function" ? next(languages) : next;
-    if (!Array.isArray(resolved)) return;
-
-    const clean = resolved.map((l) => ({
-      id: l?.id || crypto.randomUUID(),
-      naam: l?.naam || "",
-      niveau: l?.niveau || "",
-    }));
-
-    setLanguagesState(clean);
-    onChange?.(clean.filter((l) => l.naam?.trim() !== ""));
+  useEffect(() => {
+    onChange?.(languages.filter((l) => l.naam.trim() !== ""));
   }, [languages, onChange]);
 
-  const updateField = useCallback((id, field, value) => {
-    setLanguages((prev) =>
-      prev.map((lang) =>
-        lang.id === id ? { ...lang, [field]: value } : lang
-      )
-    );
-  }, [setLanguages]);
+  const setLanguages = useCallback((next) => {
+    const resolved = typeof next === "function" ? next(languages) : next;
+    setLanguagesState(resolved);
+  }, [languages]);
 
   const addLanguage = useCallback(() => {
-    setLanguages((prev) => [...prev, defaultLanguage()]);
-  }, [setLanguages]);
+    const trimmed = input.trim();
+    if (!trimmed) return setError(t("requiredField"));
+    if (languages.some((l) => l.naam.toLowerCase() === trimmed.toLowerCase())) {
+      return setError(t("duplicateValue"));
+    }
+    if (languages.length >= MAX_LANGUAGES) {
+      return setError(t("maxLanguagesReached"));
+    }
+    setLanguages([...languages, { id: crypto.randomUUID(), naam: trimmed, niveau: "" }]);
+    setInput("");
+    setError("");
+  }, [input, languages, setLanguages, t]);
 
   const removeLanguage = useCallback((id) => {
     setLanguages((prev) => prev.filter((l) => l.id !== id));
+  }, [setLanguages]);
+
+  const updateField = useCallback((id, field, value) => {
+    setLanguages((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, [field]: value } : l))
+    );
   }, [setLanguages]);
 
   const handleDragEnd = useCallback(({ active, over }) => {
@@ -101,17 +96,17 @@ function Languages({ value = [], onChange }) {
     }
   }, [languages, setLanguages]);
 
-  const handleSuggestionClick = useCallback((suggestion) => {
-    const exists = languages.some(
-      (lang) => lang.naam?.toLowerCase() === suggestion.toLowerCase()
-    );
-    if (!exists) {
-      setLanguages((prev) => [
-        ...prev,
-        { id: crypto.randomUUID(), naam: suggestion, niveau: "" },
-      ]);
+  const handleInputChange = (e) => {
+    setInput(e.target.value);
+    if (error) setError("");
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addLanguage();
     }
-  }, [languages, setLanguages]);
+  };
 
   const suggestions = useMemo(() => (
     ["dutch", "english", "french", "german", "spanish"]
@@ -120,13 +115,8 @@ function Languages({ value = [], onChange }) {
 
   const unusedSuggestions = useMemo(() =>
     suggestions.filter(
-      (s) =>
-        !languages.some(
-          (l) => l.naam?.toLowerCase() === s.toLowerCase()
-        )
+      (s) => !languages.some((l) => l.naam.toLowerCase() === s.toLowerCase())
     ), [languages, suggestions]);
-
-  const levelKeys = ["beginner", "fair", "good", "fluent", "native"];
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -136,6 +126,25 @@ function Languages({ value = [], onChange }) {
   return (
     <div className="max-w-[600px] w-full space-y-6 px-3 sm:px-4 font-[Poppins] text-sm">
       <h2 className="text-lg font-semibold">{t("languages")}</h2>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          placeholder={t("languagePlaceholder")}
+          className={`flex-1 border rounded-lg px-4 py-2 transition ${error ? "border-red-500" : "border-gray-300"}`}
+        />
+        <button
+          type="button"
+          onClick={addLanguage}
+          disabled={languages.length >= MAX_LANGUAGES}
+          className="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition"
+        >
+          {t("addLanguage")}
+        </button>
+      </div>
+      {error && <p className="text-sm text-red-500">{error}</p>}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={languages.map((l) => l.id)} strategy={verticalListSortingStrategy}>
@@ -143,53 +152,34 @@ function Languages({ value = [], onChange }) {
             {languages.map((lang) => (
               <SortableItem key={lang.id} id={lang.id}>
                 {({ dragHandleProps }) => (
-                  <div className="relative bg-white border shadow-sm rounded-xl p-4 space-y-4">
-                    {languages.length > 1 && (
-                      <div
-                        {...dragHandleProps}
-                        className="absolute top-2 right-2 text-gray-300 hover:text-gray-500 group"
-                        title={t("dragToReorder")}
-                      >
-                        <GripVertical size={16} />
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-sm">{t("language")}</label>
-                        <input
-                          type="text"
-                          value={lang.naam}
-                          onChange={(e) => updateField(lang.id, "naam", e.target.value)}
-                          className="w-full border rounded-lg px-4 py-2"
-                          placeholder={t("languagePlaceholder")}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm">{t("languageLevel")}</label>
-                        <select
-                          value={lang.niveau}
-                          onChange={(e) => updateField(lang.id, "niveau", e.target.value)}
-                          className="w-full border rounded-lg px-4 py-2"
-                        >
-                          <option value="">{t("selectLevel")}</option>
-                          {levelKeys.map((key) => (
-                            <option key={key} value={t(`languageLevels.${key}`)}>
-                              {t(`languageLevels.${key}`)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                  <div className="relative bg-white border shadow-sm rounded-xl p-4 space-y-2">
+                    <div {...dragHandleProps} className="absolute top-2 right-2 text-gray-300 hover:text-gray-500">
+                      <GripVertical size={16} />
                     </div>
-
-                    {languages.length > 1 && (
-                      <button
-                        onClick={() => removeLanguage(lang.id)}
-                        className="text-red-500 text-sm hover:underline"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        value={lang.naam}
+                        onChange={(e) => updateField(lang.id, "naam", e.target.value)}
+                        className="w-full border rounded-lg px-4 py-2"
+                        placeholder={t("languagePlaceholder")}
+                      />
+                      <select
+                        value={lang.niveau}
+                        onChange={(e) => updateField(lang.id, "niveau", e.target.value)}
+                        className="w-full border rounded-lg px-4 py-2"
                       >
-                        {t("remove")}
-                      </button>
-                    )}
+                        <option value="">{t("selectLevel")}</option>
+                        {["beginner", "fair", "good", "fluent", "native"].map((key) => (
+                          <option key={key} value={t(`languageLevels.${key}`)}>
+                            {t(`languageLevels.${key}`)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button onClick={() => removeLanguage(lang.id)} className="text-red-500 text-sm">
+                      {t("remove")}
+                    </button>
                   </div>
                 )}
               </SortableItem>
@@ -198,19 +188,15 @@ function Languages({ value = [], onChange }) {
         </SortableContext>
       </DndContext>
 
-      <button onClick={addLanguage} className="text-sm text-blue-600 hover:underline">
-        + {t("addLanguage")}
-      </button>
-
       {unusedSuggestions.length > 0 && (
-        <div>
-          <h3 className="text-sm text-gray-500 mb-2 mt-4">{t("suggestions")}</h3>
-          <div className="flex flex-wrap gap-2">
+        <div className="mt-4">
+          <h3 className="text-sm text-gray-500">{t("suggestions")}</h3>
+          <div className="flex flex-wrap gap-2 mt-2">
             {unusedSuggestions.map((s) => (
               <button
                 key={s}
-                onClick={() => handleSuggestionClick(s)}
-                className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-full transition"
+                onClick={() => addLanguage(s)}
+                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1 rounded-full transition"
               >
                 + {s}
               </button>

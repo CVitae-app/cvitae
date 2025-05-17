@@ -7,7 +7,6 @@ const MAX_HOBBIES = 5;
 
 function Hobbies({ value = [], onChange }) {
   const { t } = useTranslation();
-
   const [hobbies, setHobbies] = useState([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
@@ -18,29 +17,29 @@ function Hobbies({ value = [], onChange }) {
 
   useEffect(() => {
     onChange?.(hobbies);
-  }, [hobbies]);
+  }, [hobbies, onChange]);
 
   const suggestions = useMemo(() => {
     const list = t("hobbySuggestions", { returnObjects: true });
     return Array.isArray(list) ? list : [];
   }, [t]);
 
-  const isMaxReached = hobbies.length >= MAX_HOBBIES;
-
-  const addHobby = useCallback((val) => {
-    const trimmed = val.trim();
-    if (!trimmed) return setError(t("requiredField"));
-    if (hobbies.some((h) => h.toLowerCase() === trimmed.toLowerCase())) {
-      return setError(t("duplicateValue"));
-    }
-    if (hobbies.length >= MAX_HOBBIES) {
-      return setError(t("maxHobbiesReached"));
-    }
-
-    setHobbies((prev) => [...prev, trimmed]);
-    setInput("");
-    setError("");
-  }, [hobbies, t]);
+  const addHobby = useCallback(
+    (val) => {
+      const trimmed = val.trim();
+      if (!trimmed) return setError(t("requiredField"));
+      if (hobbies.some((h) => h.toLowerCase() === trimmed.toLowerCase())) {
+        return setError(t("duplicateValue"));
+      }
+      if (hobbies.length >= MAX_HOBBIES) {
+        return setError(t("maxHobbiesReached"));
+      }
+      setHobbies((prev) => [...prev, trimmed]);
+      setInput("");
+      setError("");
+    },
+    [hobbies, t]
+  );
 
   const removeHobby = useCallback((val) => {
     setHobbies((prev) => prev.filter((h) => h !== val));
@@ -59,10 +58,13 @@ function Hobbies({ value = [], onChange }) {
     if (error) setError("");
   };
 
-  const filteredSuggestions = useMemo(() =>
-    suggestions.filter(
-      (s) => !hobbies.some((h) => h.toLowerCase() === s.toLowerCase())
-    ), [suggestions, hobbies]);
+  const filteredSuggestions = useMemo(
+    () =>
+      suggestions.filter(
+        (s) => !hobbies.some((h) => h.toLowerCase() === s.toLowerCase())
+      ),
+    [suggestions, hobbies]
+  );
 
   return (
     <div className="max-w-[600px] w-full space-y-6 px-3 sm:px-4 font-[Poppins] text-sm">
@@ -75,7 +77,7 @@ function Hobbies({ value = [], onChange }) {
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={t("hobbyPlaceholder")}
-          disabled={isMaxReached}
+          disabled={hobbies.length >= MAX_HOBBIES}
           className={`flex-1 border rounded-xl px-4 py-2 transition ${
             error ? "border-red-500" : "border-gray-300"
           }`}
@@ -83,9 +85,9 @@ function Hobbies({ value = [], onChange }) {
         <button
           type="button"
           onClick={() => addHobby(input)}
-          disabled={isMaxReached}
+          disabled={hobbies.length >= MAX_HOBBIES}
           className={`px-4 py-2 rounded-xl text-white transition ${
-            isMaxReached
+            hobbies.length >= MAX_HOBBIES
               ? "bg-gray-300 cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-700"
           }`}
@@ -121,7 +123,7 @@ function Hobbies({ value = [], onChange }) {
         )}
       </AnimatePresence>
 
-      {!isMaxReached && filteredSuggestions.length > 0 && (
+      {filteredSuggestions.length > 0 && hobbies.length < MAX_HOBBIES && (
         <div>
           <h3 className="text-sm text-gray-500 mb-2 mt-4">{t("suggestions")}</h3>
           <div className="flex flex-wrap gap-2">

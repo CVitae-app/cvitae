@@ -79,9 +79,13 @@ export default function CVBuilder() {
   const [settings, setSettings] = useState(() =>
     JSON.parse(localStorage.getItem(FORM_KEYS.local.settings)) || defaultSettings
   );
-  const [dynamicSteps, setDynamicSteps] = useState(() =>
-    JSON.parse(localStorage.getItem(FORM_KEYS.local.dynamic)) || []
-  );
+  const [dynamicSteps, setDynamicSteps] = useState(() => {
+    const storedDynamicSteps = JSON.parse(localStorage.getItem(FORM_KEYS.local.dynamic)) || [];
+    const allSuggestedSteps = ["courses", "internships", "traits", "certifications"];
+    const updatedDynamicSteps = [...new Set([...storedDynamicSteps, ...allSuggestedSteps])];
+    localStorage.setItem(FORM_KEYS.local.dynamic, JSON.stringify(updatedDynamicSteps));
+    return updatedDynamicSteps;
+  });  
   const [step, setStep] = useState(() =>
     parseInt(localStorage.getItem(FORM_KEYS.local.step), 10) || 0
   );
