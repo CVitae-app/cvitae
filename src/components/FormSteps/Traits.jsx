@@ -118,21 +118,21 @@ function Traits({ value = [], onChange }) {
     <div className="max-w-[600px] w-full space-y-6 px-3 sm:px-4 font-[Poppins] text-sm">
       <h2 className="text-lg font-semibold">{t("traits")}</h2>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <input
           type="text"
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={t("traitPlaceholder")}
-          className={`flex-1 border rounded-lg px-4 py-2 transition ${error ? "border-red-500" : "border-gray-300"}`}
+          className={`w-full border rounded-lg px-4 py-2 transition ${error ? "border-red-500" : "border-gray-300"}`}
           disabled={traits.length >= MAX_TRAITS}
         />
         <button
           type="button"
           onClick={addTrait}
           disabled={traits.length >= MAX_TRAITS}
-          className={`px-4 py-2 rounded-lg text-white transition ${
+          className={`w-full py-2 rounded-lg text-white transition ${
             traits.length >= MAX_TRAITS
               ? "bg-gray-300 cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-700"
@@ -151,21 +151,17 @@ function Traits({ value = [], onChange }) {
             {traits.map((trait) => (
               <SortableItem key={trait.id} id={trait.id}>
                 {({ dragHandleProps }) => (
-                  <div className="relative bg-white shadow-sm border rounded-xl p-4 space-y-3">
-                    <div {...dragHandleProps} className="absolute top-2 right-2 text-gray-300 hover:text-gray-500">
+                  <div className="relative bg-white shadow-sm border rounded-xl p-4 space-y-3 flex items-center justify-between">
+                    <div {...dragHandleProps} className="text-gray-300 hover:text-gray-500 cursor-grab">
                       <GripVertical size={16} />
                     </div>
                     <input
                       type="text"
                       value={trait.naam}
                       onChange={(e) => updateTrait(trait.id, e.target.value)}
-                      className="w-full border rounded-lg px-4 py-2"
-                      placeholder={t("traitPlaceholder")}
+                      className="flex-1 border rounded-lg px-4 py-2"
                     />
-                    <button
-                      onClick={() => removeTrait(trait.id)}
-                      className="text-red-500 text-sm hover:underline"
-                    >
+                    <button onClick={() => removeTrait(trait.id)} className="text-red-500 text-sm hover:underline">
                       {t("remove")}
                     </button>
                   </div>

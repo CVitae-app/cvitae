@@ -126,24 +126,26 @@ function Languages({ value = [], onChange }) {
   return (
     <div className="max-w-[600px] w-full space-y-6 px-3 sm:px-4 font-[Poppins] text-sm">
       <h2 className="text-lg font-semibold">{t("languages")}</h2>
-      <div className="flex gap-2">
+      
+      <div className="flex flex-col gap-2">
         <input
           type="text"
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={t("languagePlaceholder")}
-          className={`flex-1 border rounded-lg px-4 py-2 transition ${error ? "border-red-500" : "border-gray-300"}`}
+          className={`w-full border rounded-lg px-4 py-2 transition ${error ? "border-red-500" : "border-gray-300"}`}
         />
         <button
           type="button"
           onClick={addLanguage}
           disabled={languages.length >= MAX_LANGUAGES}
-          className="px-4 py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition"
+          className="w-full py-2 rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition"
         >
           {t("addLanguage")}
         </button>
       </div>
+
       {error && <p className="text-sm text-red-500">{error}</p>}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -190,8 +192,8 @@ function Languages({ value = [], onChange }) {
 
       {unusedSuggestions.length > 0 && (
         <div className="mt-4">
-          <h3 className="text-sm text-gray-500">{t("suggestions")}</h3>
-          <div className="flex flex-wrap gap-2 mt-2">
+          <h3 className="text-sm text-gray-500 mb-2 mt-4">{t("suggestions")}</h3>
+          <div className="flex flex-wrap gap-2">
             {unusedSuggestions.map((s) => (
               <button
                 key={s}

@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { XMarkIcon } from "@heroicons/react/24/outline";
-import { AnimatePresence, motion } from "framer-motion";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useTranslation } from "../../contexts/LanguageContext";
+import { AnimatePresence, motion } from "framer-motion";
 
 const MAX_HOBBIES = 5;
 
@@ -19,50 +18,44 @@ function Hobbies({ value = [], onChange }) {
     onChange?.(hobbies);
   }, [hobbies, onChange]);
 
-  const suggestions = useMemo(() => {
-    const list = t("hobbySuggestions", { returnObjects: true });
-    return Array.isArray(list) ? list : [];
-  }, [t]);
+  const addHobby = useCallback(() => {
+    const trimmed = input.trim();
+    if (!trimmed) return setError(t("requiredField"));
+    if (hobbies.some((h) => h.toLowerCase() === trimmed.toLowerCase())) {
+      return setError(t("duplicateValue"));
+    }
+    if (hobbies.length >= MAX_HOBBIES) {
+      return setError(t("maxHobbiesReached"));
+    }
+    setHobbies((prev) => [...prev, trimmed]);
+    setInput("");
+    setError("");
+  }, [hobbies, input, t]);
 
-  const addHobby = useCallback(
-    (val) => {
-      const trimmed = val.trim();
-      if (!trimmed) return setError(t("requiredField"));
-      if (hobbies.some((h) => h.toLowerCase() === trimmed.toLowerCase())) {
-        return setError(t("duplicateValue"));
-      }
-      if (hobbies.length >= MAX_HOBBIES) {
-        return setError(t("maxHobbiesReached"));
-      }
-      setHobbies((prev) => [...prev, trimmed]);
-      setInput("");
-      setError("");
-    },
-    [hobbies, t]
-  );
-
-  const removeHobby = useCallback((val) => {
-    setHobbies((prev) => prev.filter((h) => h !== val));
+  const removeHobby = useCallback((hobby) => {
+    setHobbies((prev) => prev.filter((h) => h !== hobby));
     if (error) setError("");
   }, [error]);
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addHobby(input);
-    }
-  };
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
     if (error) setError("");
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addHobby();
+    }
+  };
+
+  const suggestions = useMemo(() => {
+    const list = t("hobbySuggestions", { returnObjects: true });
+    return Array.isArray(list) ? list : [];
+  }, [t]);
+
   const filteredSuggestions = useMemo(
-    () =>
-      suggestions.filter(
-        (s) => !hobbies.some((h) => h.toLowerCase() === s.toLowerCase())
-      ),
+    () => suggestions.filter((s) => !hobbies.some((h) => h.toLowerCase() === s.toLowerCase())),
     [suggestions, hobbies]
   );
 
@@ -70,23 +63,21 @@ function Hobbies({ value = [], onChange }) {
     <div className="max-w-[600px] w-full space-y-6 px-3 sm:px-4 font-[Poppins] text-sm">
       <h2 className="text-lg font-semibold">{t("hobbies")}</h2>
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <input
           type="text"
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={t("hobbyPlaceholder")}
+          className={`w-full border rounded-lg px-4 py-2 transition ${error ? "border-red-500" : "border-gray-300"}`}
           disabled={hobbies.length >= MAX_HOBBIES}
-          className={`flex-1 border rounded-xl px-4 py-2 transition ${
-            error ? "border-red-500" : "border-gray-300"
-          }`}
         />
         <button
           type="button"
-          onClick={() => addHobby(input)}
+          onClick={addHobby}
           disabled={hobbies.length >= MAX_HOBBIES}
-          className={`px-4 py-2 rounded-xl text-white transition ${
+          className={`w-full py-2 rounded-lg text-white transition ${
             hobbies.length >= MAX_HOBBIES
               ? "bg-gray-300 cursor-not-allowed"
               : "bg-blue-600 hover:bg-blue-700"
@@ -101,7 +92,7 @@ function Hobbies({ value = [], onChange }) {
       <AnimatePresence mode="popLayout">
         {hobbies.length > 0 && (
           <motion.div
-            className="flex flex-wrap gap-2"
+            className="flex flex-wrap gap-2 mt-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -113,10 +104,12 @@ function Hobbies({ value = [], onChange }) {
                 layout
               >
                 {hobby}
-                <XMarkIcon
+                <button
                   onClick={() => removeHobby(hobby)}
-                  className="w-4 h-4 ml-2 cursor-pointer hover:text-red-500"
-                />
+                  className="ml-2 text-red-500 hover:underline text-xs"
+                >
+                  {t("remove")}
+                </button>
               </motion.span>
             ))}
           </motion.div>
