@@ -183,6 +183,7 @@ traitPlaceholder: "e.g. Dedicated, Creative, Punctual",
     continueToDownload: "To download your CV, please log in",
     loginWithGoogle: "Login with Google",
     continueWithGoogle: "Continue with Google",
+    orContinueWith: "Or continue with",
     signup: "Sign up",
     createAccount: "Create an account",
     alreadyHaveAccount: "Already have an account?",
@@ -281,8 +282,9 @@ login: "Login",
 signup: "Sign up",
 loading: "Loading",
 
-
   },
+
+  
 };
 
 export default en;

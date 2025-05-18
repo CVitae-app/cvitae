@@ -13,15 +13,16 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   apiVersion: "2022-11-15",
 });
 
+// CORS setup
 const allowedOrigin = "https://app.cvitae.nl";
-
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": allowedOrigin,
   "Access-Control-Allow-Headers": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const isValidUrl = (url) => {
+// Utility function to validate URLs
+const isValidUrl = (url: string) => {
   try {
     const parsed = new URL(url);
     return parsed.hostname === "app.cvitae.nl";
@@ -56,10 +57,10 @@ serve(async (req) => {
     const { price_id, success_url, cancel_url } = body;
 
     const allowedPrices = new Set([
-      "price_1RFc3fRpTB9d9YyvRz2fYeGM", // 1 month
-      "price_1RFcEJRpTB9d9YyvOYdhdKEn", // 3 months
-      "price_1RFcEhRpTB9d9Yyvv0ydhDW4", // 6 months
-      "price_1RFcF3RpTB9d9Yvi2ILDgHI", // 1 year
+      "price_1RQ3CARwXOeOt11YY4gEeYsj", // 1 month
+      "price_1RQ3CsRwXOeOt11YQh5Ld2Ls", // 3 months
+      "price_1RQ3DHRwXOeOt11YhER7lxsd", // 6 months
+      "price_1RQ3DaRwXOeOt11YdHNWKCc5", // 1 year
     ]);
 
     if (!allowedPrices.has(price_id)) {
@@ -134,7 +135,7 @@ serve(async (req) => {
       },
       line_items: [
         {
-          price: "price_1R7HF2RpTB9d9YyvZHV4NCQP", // €1.95 one-time setup fee
+          price: "price_1RQ3EERwXOeOt11YflTOv23r", // €1.95 one-time setup fee
           quantity: 1,
         },
         {

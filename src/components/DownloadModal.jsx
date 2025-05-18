@@ -7,10 +7,10 @@ import { downloadCV } from "../utils/downloadPDF";
 import CVPreview from "./CVPreview";
 
 const plans = [
-  { id: "1month", labelKey: "plan1MonthLabel", descriptionKey: "plan1MonthDesc", priceId: "price_1RFc3fRpTB9d9YyvRz2fYeGM" },
-  { id: "3months", labelKey: "plan3MonthsLabel", descriptionKey: "plan3MonthsDesc", priceId: "price_1RFcEJRpTB9d9YyvOYdhdKEn", popular: true },
-  { id: "6months", labelKey: "plan6MonthsLabel", descriptionKey: "plan6MonthsDesc", priceId: "price_1RFcEhRpTB9d9Yyvv0ydhDW4" },
-  { id: "1year", labelKey: "plan1YearLabel", descriptionKey: "plan1YearDesc", priceId: "price_1RFcF3RpTB9d9Yvi2ILDgHI" },
+  { id: "1month", labelKey: "plan1MonthLabel", descriptionKey: "plan1MonthDesc", priceId: "price_1RQ3CARwXOeOt11YY4gEeYsj" },
+  { id: "3months", labelKey: "plan3MonthsLabel", descriptionKey: "plan3MonthsDesc", priceId: "price_1RQ3CsRwXOeOt11YQh5Ld2Ls", popular: true },
+  { id: "6months", labelKey: "plan6MonthsLabel", descriptionKey: "plan6MonthsDesc", priceId: "price_1RQ3DHRwXOeOt11YhER7lxsd" },
+  { id: "1year", labelKey: "plan1YearLabel", descriptionKey: "plan1YearDesc", priceId: "price_1RQ3DaRwXOeOt11YdHNWKCc5" },
 ];
 
 function DownloadModal({ isOpen, onClose, onDownload, cvData, startAtSubscribe = false }) {
